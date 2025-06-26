@@ -565,15 +565,15 @@ mod mac {
 }
 
 fn main() -> Result<()> {
-    let args: Vec<_> = std::env::args().skip(1).collect();
+    let _args: Vec<_> = std::env::args().skip(1).collect();
 
     cfg_if::cfg_if! {
         if #[cfg(any(target_os = "linux", target_os = "android"))] {
-            linux::real_main(args)
+            linux::real_main(_args)
         } else if #[cfg(target_os = "windows")] {
-            windows::real_main(args)
+            windows::real_main(_args)
         } else if #[cfg(target_os = "macos")] {
-            mac::real_main(args)
+            mac::real_main(_args)
         } else {
             unimplemented!();
         }

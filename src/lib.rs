@@ -11,6 +11,10 @@ cfg_if::cfg_if! {
         mod mac;
 
         pub use mac::*;
+    } else if #[cfg(target_os = "ios")] {
+        mod ios;
+
+        pub use ios::*;
     }
 }
 

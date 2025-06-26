@@ -49,6 +49,15 @@ bitflags = "2.4"
 # Binds some additional mac specifics not in libc
 mach2 = "0.4"
 
+[target.'cfg(target_os = "ios")'.dependencies]
+# iOS shares many Mach kernel interfaces with macOS
+mach2 = "0.4"
+libc = "0.2"
+
+[features]
+# Best-effort simulator support for iOS development
+ios_simulator = []
+
 [dev-dependencies]
 # We auto-detect what the test binary that is spawned for most tests should be
 # compiled for
