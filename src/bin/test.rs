@@ -332,7 +332,7 @@ mod linux {
         // One less than the requested amount, as the main thread counts as well
         for id in 1..num {
             std::thread::Builder::new()
-                .name(format!("thread_{}", id))
+                .name(format!("thread_{id}"))
                 .spawn(|| {
                     println!("1");
                     loop {
