@@ -125,6 +125,8 @@ impl MinidumpWriter {
         image: ImageInfo,
         dumper: &TaskDumper,
     ) -> Result<ImageDetails, TaskDumpError> {
+        // Check if we're reading from current process
+        let is_current_process = dumper.task() == unsafe { mach::mach_task_self() };
         let mut load_info = None;
         let mut version = None;
         let mut uuid = None;
@@ -169,7 +171,25 @@ impl MinidumpWriter {
             id: mach::LoadCommandKind::Uuid,
         })?;
 
-        let file_path = if image.file_path != 0 {
+        let file_path = if is_current_process {
+            // For current process, we can use dyld API to get reliable file paths
+            let image_count = unsafe { libc::_dyld_image_count() };
+            let mut found_path = None;
+
+            for i in 0..image_count {
+                let header = unsafe { libc::_dyld_get_image_header(i) };
+                if header as u64 == image.load_address {
+                    let name_ptr = unsafe { libc::_dyld_get_image_name(i) };
+                    if !name_ptr.is_null() {
+                        let c_str = unsafe { std::ffi::CStr::from_ptr(name_ptr) };
+                        found_path = c_str.to_str().ok().map(String::from);
+                    }
+                    break;
+                }
+            }
+            found_path
+        } else if image.file_path != 0 {
+            // For other processes, try to read from memory
             dumper
                 .read_string(image.file_path, None)
                 .unwrap_or_default()
