@@ -90,7 +90,69 @@ Every decision MUST record participating agents using the role-name format:
 ## Index
 | ID | Date | Title | Status | Decider | Relates-To |
 |----|------|-------|--------|---------|------------|
+| D-2025-07-18-01 | 2025-07-18 | Apple Common Module Restructuring | Approved | architect-stark | T-001, PR#1 |
 | D-2025-07-17-01 | 2025-07-17 | iOS Architecture Pattern Selection | Approved | architect-claude | R-100, R-101, R-102 |
+
+---
+
+## D-2025-07-18-01 - Apple Common Module Restructuring
+
+**Status**: Approved  
+**Date**: 2025-07-18  
+**Participants**:
+  - Proposers: architect-stark, boss-human
+  - Decider: architect-stark
+  - Implementer: architect-stark
+
+**Context**: 
+Initial iOS implementation (PR#1) revealed significant code duplication between macOS and iOS. The macOS MinidumpWriter already supports self-process dumping, making a separate iOS implementation unnecessary. Need to restructure to share common code while maintaining backward compatibility.
+
+**Options Considered**:
+1. **Keep Separate iOS Implementation** (initial approach)
+   - Maintain src/ios/ with duplicate code
+   - Pros: Clear separation, no risk to existing macOS code
+   - Cons: Code duplication, maintenance burden, memory leak already found
+
+2. **Direct Reuse of macOS Code** (proposed by architect-stark)
+   - Use macOS MinidumpWriter directly for iOS
+   - Pros: No duplication, proven code
+   - Cons: iOS-specific constraints mixed with macOS code
+
+3. **Apple Common Module Pattern** (proposed by boss-human)
+   - Create apple/common for shared code, apple/mac and apple/ios for platform-specific
+   - Maintain backward compatibility through re-exports
+   - Pros: Clean architecture, code reuse, maintainable, Rust idiomatic
+   - Cons: Requires careful restructuring
+
+**Decision**: 
+Selected Option 3: Apple Common Module Pattern. This provides the best balance of code reuse, maintainability, and platform-specific customization.
+
+**Rationale**:
+- Eliminates code duplication discovered in PR#1 review
+- Follows Rust idiomatic patterns for platform abstraction
+- Maintains 100% backward compatibility through re-exports
+- Allows iOS-specific adaptations without polluting macOS code
+- Fixes memory leak (vm_deallocate) in shared code benefits both platforms
+
+**Consequences**:
+- Positive: Clean architecture, reduced maintenance, shared bug fixes
+- Positive: Better code organization following Rust conventions
+- Negative: Initial complexity in restructuring
+- Follow-up: iOS-specific TaskDumper still needed for platform constraints
+
+**Implementation Details** (commit 90e4c70b):
+- Created src/apple/ module structure:
+  - apple/common/ - shared implementations
+  - apple/mac/ - macOS-specific code  
+  - apple/ios/ - iOS-specific code (deleted after migration)
+- Maintained backward compatibility:
+  - src/mac.rs re-exports apple::mac
+  - src/lib.rs provides original public API
+- Fixed memory leak in TaskDumper::read_thread_info
+- All tests pass without modification
+
+**Relates-To**: T-001, PR#1
+**Supersedes**: None
 
 ---
 
