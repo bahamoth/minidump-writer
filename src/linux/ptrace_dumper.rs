@@ -387,7 +387,7 @@ impl PtraceDumper {
         mut soft_errors: impl WriteErrorList<InitError>,
     ) -> Result<(), InitError> {
         let pid = self.pid;
-        let filename = format!("/proc/{}/task", pid);
+        let filename = format!("/proc/{pid}/task");
         let task_path = path::PathBuf::from(&filename);
         if !task_path.is_dir() {
             return Err(InitError::ProcPidTaskNotDirectory(filename));
@@ -416,7 +416,7 @@ impl PtraceDumper {
                     "testing requested failure reading thread name",
                 ))
             } else {
-                std::fs::read_to_string(format!("/proc/{}/task/{}/comm", pid, tid))
+                std::fs::read_to_string(format!("/proc/{pid}/task/{tid}/comm"))
             });
 
             let name = match name_result {
