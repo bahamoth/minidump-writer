@@ -160,32 +160,57 @@ mod tests {
 - **Merging**: Fast-forward when possible, squash messy history
 - **Cleanup**: Delete branches after merge
 
-### Commit Messages (Conventional Commits)
+### Commit Messages
+
+We follow Conventional Commits for consistency, but
+keep it simple and practical.
+
+#### Format
 ```
 <type>(<scope>): <subject>
 
-<body>
+[optional body]
 
-<footer>
+[optional footer]
 ```
 
-Types:
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Formatting (rustfmt)
-- `refactor`: Code restructuring
-- `test`: Test additions/changes
-- `chore`: Build/tool updates
-- `perf`: Performance improvements
+#### Types
+- `feat`: New feature (triggers MINOR version bump)
+- `fix`: Bug fix (triggers PATCH version bump)
+- Other common types: `docs`, `style`, `refactor`, `test`, `chore`, `perf`
+- Feel free to use other types if they better describe your change
 
-Examples:
-```
-feat(linux): Add memory mapping optimization
-fix(windows): Handle access denied errors correctly
-docs: Update platform support matrix
-chore(deps): Update minidump-common to 0.21
-```
+#### Subject Line
+- Present tense ("add" not "added")
+- ~50 characters max
+- No period at the end
+
+#### Body (Optional)
+- Explain what and why, not how
+- Wrap at 72 characters
+- Blank line between subject and body
+
+#### Footer (Optional)
+- `BREAKING CHANGE: <description>` for breaking changes
+- `Fixes #<issue>` or `Closes #<issue>` for issue
+  references
+- Keep it minimal - only add when meaningful
+
+#### Examples
+feat(ios): add crash handler for signal contexts
+
+fix(mac): handle nil file paths in dyld image info
+
+Fixes #123
+
+refactor(linux): extract memory reading into helper
+functions
+
+Simplifies the codebase by consolidating duplicate
+logic
+into reusable utilities.
+
+BREAKING CHANGE: read_memory() now returns Result<Vec>
 
 ## Dependency Management
 
