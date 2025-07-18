@@ -39,6 +39,11 @@ impl TaskDumper {
         }
     }
 
+    /// Get the task handle
+    pub fn task(&self) -> mt::task_t {
+        self.base.task
+    }
+
     /// Forward to base implementation
     pub fn read_task_memory<T>(&self, address: u64, count: usize) -> Result<Vec<T>, TaskDumpError>
     where
