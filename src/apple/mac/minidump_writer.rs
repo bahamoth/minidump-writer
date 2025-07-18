@@ -1,14 +1,14 @@
 use crate::{
+    apple::mac::{errors::WriterError, task_dumper::TaskDumper},
     dir_section::{DirSection, DumpBuf},
     mem_writer::*,
     minidump_format::{self, MDMemoryDescriptor, MDRawDirectory, MDRawHeader},
-    ios::task_dumper::TaskDumper,
 };
 use std::io::{Seek, Write};
 
 pub use mach2::mach_types::{task_t, thread_t};
 
-type Result<T> = std::result::Result<T, super::errors::WriterError>;
+type Result<T> = std::result::Result<T, WriterError>;
 
 pub struct MinidumpWriter {
     /// The crash context as captured by an exception handler
@@ -16,45 +16,55 @@ pub struct MinidumpWriter {
     /// List of raw blocks of memory we've written into the stream. These are
     /// referenced by other streams (eg thread list)
     pub(crate) memory_blocks: Vec<MDMemoryDescriptor>,
-    /// The task being dumped (iOS only supports self-process)
+    /// The task being dumped
     pub(crate) task: task_t,
     /// The handler thread, so it can be ignored/deprioritized
     pub(crate) handler_thread: thread_t,
 }
 
 impl MinidumpWriter {
-    /// Creates a minidump writer for the current process.
-    /// iOS only supports self-process dumping due to sandboxing restrictions.
+    /// Creates a minidump writer for the specified mach task (process) and
+    /// handler thread. If not specified, defaults to the current task and thread.
     ///
     /// ```
-    /// use minidump_writer::ios::MinidumpWriter;
+    /// use minidump_writer::{minidump_writer::MinidumpWriter, mach2};
     ///
-    /// // Creates a writer for the current process and thread
-    /// let mdw = MinidumpWriter::new();
+    /// // Note that this is the same as specifying `None` for both the task and
+    /// // handler thread, this is just meant to illustrate how you can setup
+    /// // a MinidumpWriter manually instead of using a `CrashContext`
+    /// // SAFETY: syscalls
+    /// let mdw = unsafe {
+    ///     MinidumpWriter::new(
+    ///         Some(mach2::traps::mach_task_self()),
+    ///         Some(mach2::mach_init::mach_thread_self()),
+    ///     )
+    /// };
     /// ```
-    pub fn new() -> Self {
+    pub fn new(task: Option<task_t>, handler_thread: Option<thread_t>) -> Self {
         Self {
             crash_context: None,
             memory_blocks: Vec::new(),
-            // SAFETY: syscall to get current task
-            task: unsafe { mach2::traps::mach_task_self() },
-            // SAFETY: syscall to get current thread
-            handler_thread: unsafe { mach2::mach_init::mach_thread_self() },
+            task: task.unwrap_or_else(|| {
+                // SAFETY: syscall
+                unsafe { mach2::traps::mach_task_self() }
+            }),
+            handler_thread: handler_thread.unwrap_or_else(|| {
+                // SAFETY: syscall
+                unsafe { mach2::mach_init::mach_thread_self() }
+            }),
         }
     }
 
-    /// Creates a minidump writer with the specified crash context
-    /// for the current process
+    /// Creates a minidump writer with the specified crash context, presumably
+    /// for another task
     pub fn with_crash_context(crash_context: crash_context::CrashContext) -> Self {
-        // On iOS, we can only dump the current process
-        debug_assert_eq!(crash_context.task, unsafe { mach2::traps::mach_task_self() });
-        
+        let task = crash_context.task;
         let handler_thread = crash_context.handler_thread;
 
         Self {
             crash_context: Some(crash_context),
             memory_blocks: Vec::new(),
-            task: unsafe { mach2::traps::mach_task_self() },
+            task,
             handler_thread,
         }
     }
@@ -140,12 +150,6 @@ impl MinidumpWriter {
     }
 }
 
-impl Default for MinidumpWriter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 pub(crate) struct ActiveThreads {
     threads: &'static [u32],
     handler_thread: u32,
@@ -179,40 +183,5 @@ impl Iterator for ActiveThreads {
         }
 
         None
-    }
-}
-
-// TODO: Add write methods for each stream type
-impl MinidumpWriter {
-    fn write_thread_list(&mut self, buffer: &mut DumpBuf, dumper: &TaskDumper) -> Result<MDRawDirectory> {
-        todo!("Implement thread list writing")
-    }
-
-    fn write_memory_list(&mut self, buffer: &mut DumpBuf, dumper: &TaskDumper) -> Result<MDRawDirectory> {
-        todo!("Implement memory list writing")
-    }
-
-    fn write_system_info(&mut self, buffer: &mut DumpBuf, dumper: &TaskDumper) -> Result<MDRawDirectory> {
-        todo!("Implement system info writing")
-    }
-
-    fn write_module_list(&mut self, buffer: &mut DumpBuf, dumper: &TaskDumper) -> Result<MDRawDirectory> {
-        todo!("Implement module list writing")
-    }
-
-    fn write_misc_info(&mut self, buffer: &mut DumpBuf, dumper: &TaskDumper) -> Result<MDRawDirectory> {
-        todo!("Implement misc info writing")
-    }
-
-    fn write_breakpad_info(&mut self, buffer: &mut DumpBuf, dumper: &TaskDumper) -> Result<MDRawDirectory> {
-        todo!("Implement breakpad info writing")
-    }
-
-    fn write_thread_names(&mut self, buffer: &mut DumpBuf, dumper: &TaskDumper) -> Result<MDRawDirectory> {
-        todo!("Implement thread names writing")
-    }
-
-    fn write_exception(&mut self, buffer: &mut DumpBuf, dumper: &TaskDumper) -> Result<MDRawDirectory> {
-        todo!("Implement exception writing")
     }
 }
