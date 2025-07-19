@@ -42,7 +42,7 @@ impl MinidumpWriter {
         Ok(dirent)
     }
 
-    /// Attempts to retrieve and write the threadname, returning the threa names
+    /// Attempts to retrieve and write the thread name, returning the thread names
     /// location if successful
     fn write_thread_name(
         buffer: &mut Buffer,
