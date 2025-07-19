@@ -3,7 +3,7 @@ use crate::minidump_cpu::RawContextCPU;
 
 impl MinidumpWriter {
     /// Writes the [`MDStreamType::ThreadListStream`] which is an array of
-    /// [`miniduimp_common::format::MINIDUMP_THREAD`]
+    /// [`minidump_common::format::MINIDUMP_THREAD`]
     pub(crate) fn write_thread_list(
         &mut self,
         buffer: &mut DumpBuf,

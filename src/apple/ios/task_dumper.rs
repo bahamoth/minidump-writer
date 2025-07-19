@@ -3,27 +3,6 @@
 use crate::apple::common::{mach, ImageInfo, TaskDumpError, TaskDumperBase};
 use mach2::mach_types as mt;
 
-/// Wraps a mach call in a Result
-macro_rules! mach_call {
-    ($call:expr) => {{
-        // SAFETY: syscall
-        let kr = unsafe { $call };
-        if kr == mach::KERN_SUCCESS {
-            Ok(())
-        } else {
-            // This is ugly, improvements to the macro welcome!
-            let mut syscall = stringify!($call);
-            if let Some(i) = syscall.find('(') {
-                syscall = &syscall[..i];
-            }
-            Err(TaskDumpError::Kernel {
-                syscall,
-                error: kr.into(),
-            })
-        }
-    }};
-}
-
 /// iOS task dumper for reading process information
 ///
 /// Due to iOS security restrictions, this can only dump the current process.
@@ -72,39 +51,10 @@ impl TaskDumper {
         self.base.task_info()
     }
 
-    /// Read the thread list for the task with proper memory management
-    pub fn read_threads(&self) -> Result<Vec<mt::thread_t>, TaskDumpError> {
+    /// Read the thread list for the task
+    pub fn read_threads(&self) -> Result<&'static [u32], TaskDumpError> {
         self.check_current_process()?;
-
-        // SAFETY: We're passing valid pointers to task_threads
-        let mut thread_list: mt::thread_array_t = std::ptr::null_mut();
-        let mut thread_count: mach2::message::mach_msg_type_number_t = 0;
-
-        mach_call!(mach2::task::task_threads(
-            self.base.task,
-            &mut thread_list,
-            &mut thread_count
-        ))?;
-
-        if thread_list.is_null() || thread_count == 0 {
-            return Ok(Vec::new());
-        }
-
-        // SAFETY: The kernel allocated this memory and gave us the count
-        let threads = unsafe { std::slice::from_raw_parts(thread_list, thread_count as usize) };
-
-        // Copy the threads to our own Vec
-        let thread_vec = threads.to_vec();
-
-        // CRITICAL FIX: Deallocate the kernel-allocated memory to prevent memory leak
-        // SAFETY: We're deallocating memory that was allocated by task_threads
-        let _res = mach_call!(mach::mach_vm_deallocate(
-            mach::mach_task_self(),
-            thread_list as u64,
-            (thread_count as u64) * std::mem::size_of::<mt::thread_t>() as u64
-        ));
-
-        Ok(thread_vec)
+        self.base.read_threads()
     }
 
     /// Get images/modules loaded in the process using dyld API
