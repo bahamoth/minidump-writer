@@ -1,5 +1,6 @@
 // macOS-specific TaskDumper implementation
 
+use crate::apple::common::mach_call;
 pub use crate::apple::common::ImageInfo;
 use crate::apple::common::{mach, AllImagesInfo, TaskDumpError, TaskDumperBase, VMRegionInfo};
 use mach2::mach_types as mt;
