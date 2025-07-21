@@ -4,11 +4,12 @@ use super::{mach, types::*};
 use mach2::mach_types as mt;
 
 /// Wraps a mach call in a Result
+#[macro_export]
 macro_rules! mach_call {
     ($call:expr) => {{
         // SAFETY: syscall
         let kr = unsafe { $call };
-        if kr == mach::KERN_SUCCESS {
+        if kr == $crate::apple::common::mach::KERN_SUCCESS {
             Ok(())
         } else {
             // This is ugly, improvements to the macro welcome!
@@ -16,7 +17,7 @@ macro_rules! mach_call {
             if let Some(i) = syscall.find('(') {
                 syscall = &syscall[..i];
             }
-            Err(TaskDumpError::Kernel {
+            Err($crate::apple::common::TaskDumpError::Kernel {
                 syscall,
                 error: kr.into(),
             })
