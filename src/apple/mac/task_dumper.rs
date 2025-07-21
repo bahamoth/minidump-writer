@@ -2,28 +2,8 @@
 
 pub use crate::apple::common::ImageInfo;
 use crate::apple::common::{mach, AllImagesInfo, TaskDumpError, TaskDumperBase, VMRegionInfo};
+use crate::mach_call;
 use mach2::mach_types as mt;
-
-/// Wraps a mach call in a Result
-macro_rules! mach_call {
-    ($call:expr) => {{
-        // SAFETY: syscall
-        let kr = unsafe { $call };
-        if kr == mach::KERN_SUCCESS {
-            Ok(())
-        } else {
-            // This is ugly, improvements to the macro welcome!
-            let mut syscall = stringify!($call);
-            if let Some(i) = syscall.find('(') {
-                syscall = &syscall[..i];
-            }
-            Err(TaskDumpError::Kernel {
-                syscall,
-                error: kr.into(),
-            })
-        }
-    }};
-}
 
 /// macOS implementation of TaskDumper
 /// Unlike iOS, macOS can dump external processes
