@@ -24,6 +24,8 @@ macro_rules! mach_call {
     }};
 }
 
+pub(in crate::apple) use mach_call;
+
 /// Base implementation for TaskDumper with common functionality
 /// for all Apple platforms
 pub struct TaskDumperBase {
