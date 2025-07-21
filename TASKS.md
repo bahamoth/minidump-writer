@@ -55,18 +55,17 @@ Before claiming any task, agents must identify themselves:
 
 | ID | Title | Status | Assignee | Links | Notes |
 |----|-------|--------|----------|-------|-------|
-| T-001 | Implement iOS MinidumpWriter struct | DOING | dev-victor | R-001, R-002 | Core writer for iOS platform |
-| T-002 | Add iOS crash signal handler | TODO | - | R-003, R-004 | Signal-safe implementation required |
-| T-003 | Implement iOS TaskDumper | TODO | - | R-005 | Adapt from macOS with iOS constraints |
-| T-004 | Create iOS system info collector | DOING | dev-zatanna | R-009 | Device model, OS version, architecture |
-| T-005 | Write iOS thread state dumper | TODO | - | R-006 | ARM64 register state capture |
-| T-006 | Add iOS memory region mapper | TODO | - | R-007 | Handle app sandbox restrictions |
-| T-007 | Implement pre-allocated buffer system | TODO | - | R-003 | For signal-safe operations |
-| T-008 | Create iOS exception info handler | TODO | - | R-008 | Mach exception details |
-| T-009 | Write iOS-specific tests | TODO | - | R-012 | Unit and integration tests |
-| T-010 | Add iOS simulator support | TODO | - | R-011 | Feature flag for x86_64 builds |
-| T-011 | Document iOS platform limitations | TODO | - | R-013 | Update README and docs |
-| T-012 | Create iOS example app | TODO | - | R-014 | Swift/ObjC integration demo |
+| T-001 | Implement iOS MinidumpWriter struct | DONE   | dev-victor | R-001, R-002 | Core writer for iOS platform |
+| T-003 | Implement iOS TaskDumper | TODO   | - | R-005 | Adapt from macOS with iOS constraints |
+| T-004 | Create iOS system info collector | DOING  | architect-strange | R-009 | Device model, OS version, architecture |
+| T-005 | Write iOS thread state dumper | TODO   | - | R-006 | ARM64 register state capture |
+| T-006 | Add iOS memory region mapper | TODO   | - | R-007 | Handle app sandbox restrictions |
+| T-007 | Implement pre-allocated buffer system | TODO   | - | R-003 | For signal-safe operations |
+| T-008 | Create iOS exception info handler | TODO   | - | R-008 | Mach exception details |
+| T-009 | Write iOS-specific tests | TODO   | - | R-012 | Unit and integration tests |
+| T-010 | Add iOS simulator support | TODO   | - | R-011 | Feature flag for x86_64 builds |
+| T-011 | Document iOS platform limitations | TODO   | - | R-013 | Update README and docs |
+| T-012 | Create iOS example app | TODO   | - | R-014 | Swift/ObjC integration demo |
 
 ### Completed Tasks
 
@@ -82,6 +81,7 @@ Before claiming any task, agents must identify themselves:
 2025-07-17: T-004: Status TODO → DOING (claimed by dev-zatanna)
 2025-07-17: T-001: Status TODO → DOING (claimed by dev-victor)
 2025-07-17: T-004: Status DOING → DONE (completed by dev-zatanna)
+2025-07-21: T-004: Assignee dev-zatanna → architect-strange (task reassigned)
 ```
 
 ## Templates
