@@ -1,5 +1,5 @@
 use crate::{
-    apple::ios::task_dumper::TaskDumper,
+    apple::ios::{crash_context::CrashContext, task_dumper::TaskDumper},
     dir_section::{DirSection, DumpBuf},
     mem_writer::*,
     minidump_format::{self, MDMemoryDescriptor, MDRawDirectory, MDRawHeader},
@@ -14,8 +14,8 @@ type Result<T> = std::result::Result<T, WriterError>;
 pub enum WriterError {
     #[error("Failed to write minidump header")]
     HeaderError,
-    #[error("Failed to write directory")]
-    DirectoryError,
+    #[error("Failed to write directory: {0}")]
+    DirectoryError(String),
     #[error("System info error: {0}")]
     SystemInfoError(#[from] super::streams::system_info::SystemInfoError),
     #[error("IO error: {0}")]
@@ -26,7 +26,7 @@ pub enum WriterError {
 
 pub struct MinidumpWriter {
     /// The crash context as captured by an exception handler
-    pub(crate) crash_context: Option<crash_context::CrashContext>,
+    pub(crate) crash_context: Option<CrashContext>,
     /// List of raw blocks of memory we've written into the stream. These are
     /// referenced by other streams (eg thread list)
     pub(crate) memory_blocks: Vec<MDMemoryDescriptor>,
@@ -49,7 +49,7 @@ impl MinidumpWriter {
     }
 
     /// Creates a minidump writer with the specified crash context
-    pub fn with_crash_context(crash_context: crash_context::CrashContext) -> Self {
+    pub fn with_crash_context(crash_context: CrashContext) -> Self {
         // On iOS, we can only dump the current process
         debug_assert_eq!(crash_context.task, unsafe {
             mach2::traps::mach_task_self()
@@ -76,24 +76,27 @@ impl MinidumpWriter {
             .reserve(header_size)
             .map_err(|e| WriterError::MemoryWriterError(e.to_string()))?;
 
-        let mut dir_section =
-            DirSection::new(&mut buffer, 0).map_err(|_| WriterError::DirectoryError)?;
+        let mut dir_section = DirSection::new(&mut buffer, 0, destination).map_err(|e| {
+            WriterError::DirectoryError(format!("Failed to create directory section: {}", e))
+        })?;
 
         // Write system info stream
         let dirent = crate::apple::ios::streams::system_info::write_system_info(&mut buffer)?;
-        dir_section
-            .write_entry(dirent)
-            .map_err(|_| WriterError::DirectoryError)?;
+        dir_section.write_entry(dirent).map_err(|e| {
+            WriterError::DirectoryError(format!("Failed to write directory entry: {}", e))
+        })?;
 
         // TODO: Add other streams (thread list, memory list, etc.)
 
         // Write directory
-        let directory_location = dir_section
-            .position()
-            .map_err(|_| WriterError::DirectoryError)?;
+        let directory_location = dir_section.position().map_err(|e| {
+            WriterError::DirectoryError(format!("Failed to get directory position: {}", e))
+        })?;
         dir_section
             .write_to_buffer(&mut buffer, None)
-            .map_err(|_| WriterError::DirectoryError)?;
+            .map_err(|e| {
+                WriterError::DirectoryError(format!("Failed to write directory to buffer: {}", e))
+            })?;
 
         // Write header
         let header = MDRawHeader {

@@ -34,7 +34,17 @@ mod tests {
         let dirent = result.unwrap();
         let offset = dirent.location.rva as usize;
 
+        // Verify buffer bounds before unsafe access
+        assert!(
+            offset + std::mem::size_of::<MDRawSystemInfo>() <= bytes.len(),
+            "System info offset {} + size {} exceeds buffer length {}",
+            offset,
+            std::mem::size_of::<MDRawSystemInfo>(),
+            bytes.len()
+        );
+
         // SAFETY: We know the buffer contains valid MDRawSystemInfo at this offset
+        // and we've verified the bounds above
         let sys_info = unsafe {
             let ptr = bytes.as_ptr().add(offset) as *const MDRawSystemInfo;
             &*ptr
@@ -71,7 +81,16 @@ mod tests {
         let bytes = result.unwrap();
         assert!(!bytes.is_empty());
 
+        // Verify buffer is large enough for header
+        assert!(
+            bytes.len() >= std::mem::size_of::<MDRawHeader>(),
+            "Buffer too small for header: {} < {}",
+            bytes.len(),
+            std::mem::size_of::<MDRawHeader>()
+        );
+
         // Verify header
+        // SAFETY: We've verified the buffer is large enough for MDRawHeader
         let header = unsafe {
             let ptr = bytes.as_ptr() as *const MDRawHeader;
             &*ptr
