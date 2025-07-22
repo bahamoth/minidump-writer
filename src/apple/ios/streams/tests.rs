@@ -41,7 +41,7 @@ mod tests {
         };
 
         // Verify iOS platform ID
-        assert_eq!(sys_info.platform_id, 0x8000); // iOS platform
+        assert_eq!(sys_info.platform_id, PlatformId::Ios as u32);
 
         // Verify processor architecture
         assert_eq!(
