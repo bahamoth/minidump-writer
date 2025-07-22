@@ -1,5 +1,6 @@
 // iOS-specific implementation
 
+mod crash_context;
 mod minidump_writer;
 mod streams;
 mod task_dumper;
