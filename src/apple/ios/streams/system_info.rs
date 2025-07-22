@@ -35,20 +35,6 @@ fn build_version() -> String {
     mach::sysctl_string(b"kern.osversion\0")
 }
 
-/// Retrieves device model information for iOS.
-fn device_model() -> String {
-    #[cfg(target_os = "ios")]
-    {
-        // On real iOS devices, hw.model returns device identifier like "iPhone13,2"
-        mach::sysctl_string(b"hw.model\0")
-    }
-    #[cfg(not(target_os = "ios"))]
-    {
-        // For simulator or other platforms during development
-        String::from("iOS Simulator")
-    }
-}
-
 /// Writes the system info stream for iOS.
 pub fn write_system_info(buffer: &mut DumpBuf) -> Result<MDRawDirectory, SystemInfoError> {
     let mut info_section = MemoryWriter::<MDRawSystemInfo>::alloc(buffer)
@@ -87,9 +73,9 @@ pub fn write_system_info(buffer: &mut DumpBuf) -> Result<MDRawDirectory, SystemI
         number_of_processors,
         cpu,
 
-        // OS - Use iOS-specific platform ID
-        platform_id: 0x8000, // iOS platform ID (not officially defined in minidump format)
-        product_type: 1,     // Mobile device
+        // OS
+        platform_id: PlatformId::Ios as u32,
+        product_type: 1, // Mobile device
         major_version,
         minor_version,
         build_number,
