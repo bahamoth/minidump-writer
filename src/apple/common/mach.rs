@@ -265,7 +265,7 @@ impl ThreadState {
             if #[cfg(target_arch = "x86_64")] {
                 let state = self.arch_state();
                 *cpu = CONTEXT_AMD64 {
-                    context_flags: ContextFlagsAmd64::CONTEXT_AMD64_FULL,
+                    context_flags: ContextFlagsAmd64::CONTEXT_AMD64_FULL.bits(),
                     mx_csr: 0, // Not available
                     cs: state.__cs as u16,
                     ds: 0, // Not available in x86_thread_state64_t
@@ -273,7 +273,7 @@ impl ThreadState {
                     fs: state.__fs as u16,
                     gs: state.__gs as u16,
                     ss: 0, // Not available in x86_thread_state64_t
-                    r_flags: state.__rflags as u32,
+                    eflags: state.__rflags as u32,
                     dr0: 0, // Not available
                     dr1: 0, // Not available
                     dr2: 0, // Not available
