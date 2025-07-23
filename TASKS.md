@@ -56,8 +56,8 @@ Before claiming any task, agents must identify themselves:
 | ID | Title | Status | Assignee | Links | Notes |
 |----|-------|--------|----------|-------|-------|
 | T-001 | Implement iOS MinidumpWriter struct | DONE   | dev-victor | R-001, R-002 | Core writer for iOS platform |
-| T-003 | Implement iOS TaskDumper | TODO   | - | R-005 | Adapt from macOS with iOS constraints |
-| T-004 | Create iOS system info collector | DOING  | architect-strange | R-009, #5 | Device model, OS version, architecture. **Architectural issues found**: 1) crash-context crate doesn't support iOS - need custom CrashContext, 2) Fixed platform ID from 0x8000 to PlatformId::Ios (0x8102) |
+| T-003 | Implement iOS TaskDumper | DOING  | architect-strange | R-005 | Adapt from macOS with iOS constraints |
+| T-004 | Create iOS system info collector | DONE   | architect-strange | R-009, #5 | Device model, OS version, architecture. **Architectural issues found**: 1) crash-context crate doesn't support iOS - need custom CrashContext, 2) Fixed platform ID from 0x8000 to PlatformId::Ios (0x8102) |
 | T-005 | Write iOS thread state dumper | TODO   | - | R-006 | ARM64 register state capture |
 | T-006 | Add iOS memory region mapper | TODO   | - | R-007 | Handle app sandbox restrictions |
 | T-007 | Implement pre-allocated buffer system | TODO   | - | R-003 | For signal-safe operations |
@@ -66,13 +66,8 @@ Before claiming any task, agents must identify themselves:
 | T-010 | Add iOS simulator support | TODO   | - | R-011 | Feature flag for x86_64 builds |
 | T-011 | Document iOS platform limitations | TODO   | - | R-013 | Update README and docs |
 | T-012 | Create iOS example app | TODO   | - | R-014 | Swift/ObjC integration demo |
-| T-013 | Implement iOS CrashContext | DOING  | architect-forge | R-001, R-002 | **BLOCKER**: crash-context crate doesn't support iOS. Need custom implementation for iOS MinidumpWriter |
+| T-013 | Implement iOS CrashContext | DONE   | architect-forge | R-001, R-002 | **BLOCKER**: crash-context crate doesn't support iOS. Need custom implementation for iOS MinidumpWriter |
 
-### Completed Tasks
-
-| ID | Title | Status | Assignee | Links | Notes |
-|----|-------|--------|----------|-------|-------|
-| _Example: T-000_ | _Setup project scaffolding_ | _DONE_ | _dev-team_ | _-_ | _Initial setup_ |
 
 ### Task Assignment History
 
@@ -84,6 +79,8 @@ Before claiming any task, agents must identify themselves:
 2025-07-17: T-004: Status DOING → DONE (completed by dev-zatanna)
 2025-07-21: T-004: Assignee dev-zatanna → architect-strange (task reassigned)
 2025-07-22: T-013: Created new blocker task for iOS CrashContext implementation
+2025-07-23: T-003: Assigned to architect-strange
+2025-07-23: T-003: Status TODO → DOING (claimed by architect-strange)
 ```
 
 ## Templates
