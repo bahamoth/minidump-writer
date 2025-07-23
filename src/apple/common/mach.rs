@@ -235,9 +235,7 @@ cfg_if::cfg_if! {
 }
 
 use crate::minidump_cpu::RawContextCPU;
-use minidump_common::format::{
-    ContextFlagsAmd64, ContextFlagsArm64Old, CONTEXT_AMD64, CONTEXT_ARM64_OLD,
-};
+use minidump_common::format::{ContextFlagsArm64Old, CONTEXT_ARM64_OLD};
 
 #[repr(C, align(8))]
 pub struct ThreadState {
@@ -296,14 +294,18 @@ impl ThreadState {
                 };
             } else if #[cfg(target_arch = "aarch64")] {
                 let state = self.arch_state();
+                // Convert x array (29 elements) to iregs array (31 elements)
+                let mut iregs = [0u64; 31];
+                for (i, &val) in state.x.iter().enumerate() {
+                    iregs[i] = val;
+                }
+
                 *cpu = CONTEXT_ARM64_OLD {
-                    context_flags: ContextFlagsArm64Old::CONTEXT_ARM64_FULL,
+                    context_flags: ContextFlagsArm64Old::CONTEXT_ARM64_OLD_FULL.bits() as u64,
                     cpsr: state.cpsr,
                     pc: state.pc,
                     sp: state.sp,
-                    regs: state.x,
-                    fp: state.fp,
-                    lr: state.lr,
+                    iregs,
                     ..Default::default()
                 };
             }
@@ -692,8 +694,7 @@ pub fn sysctl_string(name: &[u8]) -> String {
             return String::new();
         }
 
-        let mut buff = Vec::new();
-        buff.resize(buf_len, 0);
+        let mut buff = vec![0; buf_len];
 
         if libc::sysctlbyname(
             name.as_ptr().cast(),
