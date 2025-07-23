@@ -234,6 +234,11 @@ cfg_if::cfg_if! {
     }
 }
 
+use crate::minidump_cpu::RawContextCPU;
+use minidump_common::format::{
+    ContextFlagsAmd64, ContextFlagsArm64Old, CONTEXT_AMD64, CONTEXT_ARM64_OLD,
+};
+
 #[repr(C, align(8))]
 pub struct ThreadState {
     pub state: [u32; THREAD_STATE_MAX],
@@ -250,6 +255,61 @@ impl Default for ThreadState {
 }
 
 impl ThreadState {
+    pub fn fill_cpu_context(&self, cpu: &mut RawContextCPU) {
+        cfg_if::cfg_if! {
+            if #[cfg(target_arch = "x86_64")] {
+                let state = self.arch_state();
+                *cpu = CONTEXT_AMD64 {
+                    context_flags: ContextFlagsAmd64::CONTEXT_AMD64_FULL,
+                    mx_csr: 0, // Not available
+                    cs: state.__cs as u16,
+                    ds: state.__ds as u16,
+                    es: state.__es as u16,
+                    fs: state.__fs as u16,
+                    gs: state.__gs as u16,
+                    ss: state.__ss as u16,
+                    r_flags: state.__rflags as u32,
+                    dr0: 0, // Not available
+                    dr1: 0, // Not available
+                    dr2: 0, // Not available
+                    dr3: 0, // Not available
+                    dr6: 0, // Not available
+                    dr7: 0, // Not available
+                    rax: state.__rax,
+                    rcx: state.__rcx,
+                    rdx: state.__rdx,
+                    rbx: state.__rbx,
+                    rsp: state.__rsp,
+                    rbp: state.__rbp,
+                    rsi: state.__rsi,
+                    rdi: state.__rdi,
+                    r8: state.__r8,
+                    r9: state.__r9,
+                    r10: state.__r10,
+                    r11: state.__r11,
+                    r12: state.__r12,
+                    r13: state.__r13,
+                    r14: state.__r14,
+                    r15: state.__r15,
+                    rip: state.__rip,
+                    ..Default::default()
+                };
+            } else if #[cfg(target_arch = "aarch64")] {
+                let state = self.arch_state();
+                *cpu = CONTEXT_ARM64_OLD {
+                    context_flags: ContextFlagsArm64Old::CONTEXT_ARM64_FULL,
+                    cpsr: state.cpsr,
+                    pc: state.pc,
+                    sp: state.sp,
+                    regs: state.x,
+                    fp: state.fp,
+                    lr: state.lr,
+                    ..Default::default()
+                };
+            }
+        }
+    }
+
     /// Gets the program counter
     #[inline]
     pub fn pc(&self) -> u64 {

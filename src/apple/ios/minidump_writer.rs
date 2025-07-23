@@ -1,5 +1,5 @@
 use crate::{
-    apple::ios::{crash_context::CrashContext, task_dumper::TaskDumper},
+    apple::ios::{crash_context::IosCrashContext, task_dumper::TaskDumper},
     dir_section::{DirSection, DumpBuf},
     mem_writer::*,
     minidump_format::{self, MDMemoryDescriptor, MDRawDirectory, MDRawHeader},
@@ -18,6 +18,8 @@ pub enum WriterError {
     DirectoryError(String),
     #[error("System info error: {0}")]
     SystemInfoError(#[from] super::streams::system_info::SystemInfoError),
+    #[error("Stream error: {0}")]
+    StreamError(#[from] super::streams::StreamError),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
     #[error("Memory writer error: {0}")]
@@ -26,14 +28,14 @@ pub enum WriterError {
 
 pub struct MinidumpWriter {
     /// The crash context as captured by an exception handler
-    pub(crate) crash_context: Option<CrashContext>,
+    pub(crate) crash_context: Option<IosCrashContext>,
     /// List of raw blocks of memory we've written into the stream. These are
     /// referenced by other streams (eg thread list)
     pub(crate) memory_blocks: Vec<MDMemoryDescriptor>,
     /// The task being dumped (on iOS, always self)
     pub(crate) task: task_t,
     /// The handler thread, so it can be ignored/deprioritized
-    pub(crate) handler_thread: thread_t,
+    pub(crate) handler_thread: Option<thread_t>,
 }
 
 impl MinidumpWriter {
@@ -44,25 +46,19 @@ impl MinidumpWriter {
             memory_blocks: Vec::new(),
             // SAFETY: syscalls
             task: unsafe { mach2::traps::mach_task_self() },
-            handler_thread: unsafe { mach2::mach_init::mach_thread_self() },
+            handler_thread: None,
         }
     }
 
-    /// Creates a minidump writer with the specified crash context
-    pub fn with_crash_context(crash_context: CrashContext) -> Self {
+    /// Sets the crash context for the minidump.
+    pub fn set_crash_context(&mut self, crash_context: IosCrashContext) {
         // On iOS, we can only dump the current process
         debug_assert_eq!(crash_context.task, unsafe {
             mach2::traps::mach_task_self()
         });
 
-        let handler_thread = crash_context.handler_thread;
-
-        Self {
-            crash_context: Some(crash_context),
-            memory_blocks: Vec::new(),
-            task: crash_context.task,
-            handler_thread,
-        }
+        self.handler_thread = Some(crash_context.handler_thread);
+        self.crash_context = Some(crash_context);
     }
 
     /// Writes a minidump to the specified destination
@@ -80,13 +76,27 @@ impl MinidumpWriter {
             WriterError::DirectoryError(format!("Failed to create directory section: {}", e))
         })?;
 
-        // Write system info stream
-        let dirent = crate::apple::ios::streams::system_info::write_system_info(&mut buffer)?;
+        // Write thread list stream first to get the context
+        let (thread_list_dirent, crashing_thread_context) =
+            crate::apple::ios::streams::thread_list::write(self, &mut buffer, &dumper)
+                .map_err(WriterError::from)?;
+
+        // Write exception stream
+        let dirent = crate::apple::ios::streams::exception::write(
+            self,
+            &mut buffer,
+            crashing_thread_context,
+        )
+        .map_err(WriterError::from)?;
         dir_section.write_entry(dirent).map_err(|e| {
             WriterError::DirectoryError(format!("Failed to write directory entry: {}", e))
         })?;
 
-        // TODO: Add other streams (thread list, memory list, etc.)
+        dir_section.write_entry(thread_list_dirent).map_err(|e| {
+            WriterError::DirectoryError(format!("Failed to write directory entry: {}", e))
+        })?;
+
+        // TODO: Add other streams (memory list, etc.)
 
         // Write directory
         let directory_location = dir_section.position().map_err(|e| {

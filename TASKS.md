@@ -66,7 +66,7 @@ Before claiming any task, agents must identify themselves:
 | T-010 | Add iOS simulator support | TODO   | - | R-011 | Feature flag for x86_64 builds |
 | T-011 | Document iOS platform limitations | TODO   | - | R-013 | Update README and docs |
 | T-012 | Create iOS example app | TODO   | - | R-014 | Swift/ObjC integration demo |
-| T-013 | Implement iOS CrashContext | TODO   | - | R-001, R-002 | **BLOCKER**: crash-context crate doesn't support iOS. Need custom implementation for iOS MinidumpWriter |
+| T-013 | Implement iOS CrashContext | DOING  | architect-forge | R-001, R-002 | **BLOCKER**: crash-context crate doesn't support iOS. Need custom implementation for iOS MinidumpWriter |
 
 ### Completed Tasks
 
