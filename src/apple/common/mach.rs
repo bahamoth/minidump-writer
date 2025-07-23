@@ -235,7 +235,14 @@ cfg_if::cfg_if! {
 }
 
 use crate::minidump_cpu::RawContextCPU;
-use minidump_common::format::{ContextFlagsArm64Old, CONTEXT_ARM64_OLD};
+
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "x86_64")] {
+        use minidump_common::format::{ContextFlagsAmd64, CONTEXT_AMD64};
+    } else if #[cfg(target_arch = "aarch64")] {
+        use minidump_common::format::{ContextFlagsArm64Old, CONTEXT_ARM64_OLD};
+    }
+}
 
 #[repr(C, align(8))]
 pub struct ThreadState {
@@ -261,11 +268,11 @@ impl ThreadState {
                     context_flags: ContextFlagsAmd64::CONTEXT_AMD64_FULL,
                     mx_csr: 0, // Not available
                     cs: state.__cs as u16,
-                    ds: state.__ds as u16,
-                    es: state.__es as u16,
+                    ds: 0, // Not available in x86_thread_state64_t
+                    es: 0, // Not available in x86_thread_state64_t
                     fs: state.__fs as u16,
                     gs: state.__gs as u16,
-                    ss: state.__ss as u16,
+                    ss: 0, // Not available in x86_thread_state64_t
                     r_flags: state.__rflags as u32,
                     dr0: 0, // Not available
                     dr1: 0, // Not available
