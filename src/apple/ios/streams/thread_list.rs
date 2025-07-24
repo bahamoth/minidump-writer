@@ -115,7 +115,7 @@ fn write_stack_from_start_address(
                     data_size: stack_buffer.len() as u32,
                     rva: buffer.position() as u32,
                 };
-                buffer.write_all(&stack_buffer);
+                buffer.write_all(&stack_buffer)?;
                 stack_location
             })
             .ok()
