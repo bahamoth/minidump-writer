@@ -276,56 +276,6 @@ impl TaskDumper {
         })
     }
 
-    /// Get all VM regions in the task
-    pub fn read_vm_regions(&self) -> Result<Vec<VMRegionInfo>, TaskDumpError> {
-        self.check_current_process()?;
-
-        let mut regions = Vec::new();
-        let mut region_base = 0;
-        let mut region_size = 0;
-        let mut info: mach::vm_region_submap_info_64 = unsafe { std::mem::zeroed() };
-        let mut info_size = std::mem::size_of_val(&info) as u32;
-        let mut nesting_level = 0;
-
-        loop {
-            // SAFETY: syscall
-            let kr = unsafe {
-                mach::mach_vm_region_recurse(
-                    self.base.task,
-                    &mut region_base,
-                    &mut region_size,
-                    &mut nesting_level,
-                    &mut info as *mut _ as *mut i32,
-                    &mut info_size,
-                )
-            };
-
-            if kr != mach::KERN_SUCCESS {
-                if kr == mach::KERN_INVALID_ADDRESS {
-                    // We've reached the end of the tasks VM regions
-                    break;
-                }
-
-                return Err(TaskDumpError::Kernel {
-                    syscall: "mach_vm_region_recurse",
-                    error: kr.into(),
-                });
-            }
-
-            if info.is_submap != 0 {
-                nesting_level += 1;
-            } else {
-                regions.push(VMRegionInfo {
-                    info,
-                    range: region_base..region_base + region_size,
-                });
-
-                region_base += region_size;
-            }
-        }
-
-        Ok(regions)
-    }
 
     /// Helper to check if we're accessing the current process
     fn check_current_process(&self) -> Result<(), TaskDumpError> {
