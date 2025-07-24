@@ -287,6 +287,12 @@ impl TaskDumper {
     }
 }
 
+/// Implementation of ThreadInfo trait for thread_basic_info
+impl mach::ThreadInfo for mach2::thread_basic_info::thread_basic_info_t {
+    /// THREAD_BASIC_INFO
+    const FLAVOR: u32 = 3;
+}
+
 // dyld API bindings for iOS
 extern "C" {
     fn _dyld_image_count() -> u32;
