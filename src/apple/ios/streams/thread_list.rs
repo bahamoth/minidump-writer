@@ -74,7 +74,11 @@ pub fn write(
             dumper.thread_info::<mach2::thread_basic_info::thread_basic_info_t>(tid)
         {
             thread.suspend_count = basic_info.suspend_count as u32;
-            // Priority is a complex calculation on macOS/iOS, using policy as proxy
+            // Priority is a complex calculation on macOS/iOS. The `policy` field is used here as a proxy for `priority`
+            // because macOS/iOS does not provide a direct thread priority value. The `policy` field represents the
+            // scheduling policy of the thread (e.g., timesharing, fixed priority, etc.), and its numeric value can
+            // vary depending on the system's implementation. Consumers of this value should be aware that it is not
+            // a direct priority metric but rather an approximation based on the thread's scheduling policy.
             thread.priority = basic_info.policy as u32;
         }
 
