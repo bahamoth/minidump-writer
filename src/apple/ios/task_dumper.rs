@@ -9,6 +9,12 @@ use mach2::mach_types as mt;
 /// dyld all image infos version we support
 const DYLD_ALL_IMAGE_INFOS_VERSION: u32 = 1;
 
+/// Implementation of ThreadInfo trait for thread_basic_info
+impl mach::ThreadInfo for mach2::thread_basic_info::thread_basic_info_t {
+    /// THREAD_BASIC_INFO
+    const FLAVOR: u32 = 3;
+}
+
 /// iOS task dumper for reading process information
 ///
 /// Due to iOS security restrictions, this can only dump the current process.
@@ -285,12 +291,6 @@ impl TaskDumper {
         }
         Ok(())
     }
-}
-
-/// Implementation of ThreadInfo trait for thread_basic_info
-impl mach::ThreadInfo for mach2::thread_basic_info::thread_basic_info_t {
-    /// THREAD_BASIC_INFO
-    const FLAVOR: u32 = 3;
 }
 
 // dyld API bindings for iOS

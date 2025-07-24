@@ -10,6 +10,12 @@ use crate::{
 
 type Result<T> = std::result::Result<T, super::StreamError>;
 
+/// Sentinel value indicating a null or zero stack pointer
+pub const STACK_POINTER_NULL: u64 = 0xdeadbeef;
+
+/// Sentinel value indicating a stack read failure
+pub const STACK_READ_FAILED: u64 = 0xdeaddead;
+
 pub fn write(
     config: &mut MinidumpWriter,
     buffer: &mut DumpBuf,
@@ -129,9 +135,9 @@ fn write_stack_from_start_address(
 
     thread.stack.memory = stack_location.unwrap_or_else(|| {
         let borked = if stack_size == 0 {
-            0xdeadbeef
+            STACK_POINTER_NULL
         } else {
-            0xdeaddead
+            STACK_READ_FAILED
         };
 
         thread.stack.start_of_memory_range = borked;
