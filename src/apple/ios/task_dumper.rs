@@ -276,7 +276,6 @@ impl TaskDumper {
         })
     }
 
-
     /// Helper to check if we're accessing the current process
     fn check_current_process(&self) -> Result<(), TaskDumpError> {
         if !self.can_access_task() {
