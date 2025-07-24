@@ -6,6 +6,9 @@ use crate::apple::common::{
 };
 use mach2::mach_types as mt;
 
+/// dyld all image infos version we support
+const DYLD_ALL_IMAGE_INFOS_VERSION: u32 = 1;
+
 /// iOS task dumper for reading process information
 ///
 /// Due to iOS security restrictions, this can only dump the current process.
@@ -15,18 +18,19 @@ pub struct TaskDumper {
 }
 
 impl TaskDumper {
-    pub fn new(task: mt::task_t) -> Self {
+    pub fn new(task: mt::task_t) -> Result<Self, TaskDumpError> {
         // On iOS, we can only dump the current task
         let current_task = unsafe { mach2::traps::mach_task_self() };
 
         if task != current_task {
-            // We'll handle this error when attempting operations
-            log::warn!("iOS only supports dumping the current process");
+            return Err(TaskDumpError::SecurityRestriction(
+                "iOS only supports dumping the current process".into(),
+            ));
         }
 
-        Self {
+        Ok(Self {
             base: TaskDumperBase::new(task),
-        }
+        })
     }
 
     /// Forward to base implementation
@@ -157,7 +161,7 @@ impl TaskDumper {
         // Create AllImagesInfo with available data
         // Using sentinel value 0 for fields not available on iOS
         let all_images_info = AllImagesInfo {
-            version: 1, // dyld version 1 format
+            version: DYLD_ALL_IMAGE_INFOS_VERSION,
             info_array_count: count,
             info_array_addr: 0, // Not available on iOS (sentinel value)
             _notification: 0,
@@ -184,6 +188,11 @@ impl TaskDumper {
             let header_buf = self.read_task_memory::<mach::MachHeader>(img.load_address, 1)?;
             let header = &header_buf[0];
 
+            // Validate magic number before accessing other fields
+            if header.magic != mach::MH_MAGIC_64 && header.magic != mach::MH_CIGAM_64 {
+                continue; // Skip invalid headers
+            }
+
             if header.file_type == mach::MH_EXECUTE {
                 return Ok(img);
             }
@@ -207,8 +216,8 @@ impl TaskDumper {
         let header = &header_buf[0];
 
         // Validate magic number
-        // iOS runs on ARM64 which is little-endian, so we only need to check MH_MAGIC_64
-        if header.magic != mach::MH_MAGIC_64 {
+        // iOS runs on ARM64 which is little-endian, but check both for completeness
+        if header.magic != mach::MH_MAGIC_64 && header.magic != mach::MH_CIGAM_64 {
             return Err(TaskDumpError::InvalidMachHeader);
         }
 
@@ -239,34 +248,26 @@ impl TaskDumper {
 
         let mut region_base = addr;
         let mut region_size = 0;
+        let mut nesting_level = 0;
         let mut info: mach::vm_region_submap_info_64 = unsafe { std::mem::zeroed() };
         let mut info_size = std::mem::size_of_val(&info) as u32;
-        let mut nesting_level = 0;
-        let mut kr = mach::KERN_INVALID_ADDRESS;
 
-        while kr != mach::KERN_SUCCESS {
-            // SAFETY: syscall
-            kr = unsafe {
-                mach::mach_vm_region_recurse(
-                    self.base.task,
-                    &mut region_base,
-                    &mut region_size,
-                    &mut nesting_level,
-                    &mut info as *mut _ as *mut i32,
-                    &mut info_size,
-                )
-            };
+        let kr = unsafe {
+            mach::mach_vm_region_recurse(
+                self.base.task,
+                &mut region_base,
+                &mut region_size,
+                &mut nesting_level,
+                &mut info as *mut _ as *mut i32,
+                &mut info_size,
+            )
+        };
 
-            if kr != mach::KERN_SUCCESS {
-                return Err(TaskDumpError::Kernel {
-                    syscall: "mach_vm_region_recurse",
-                    error: kr.into(),
-                });
-            }
-
-            if info.is_submap != 0 {
-                nesting_level += 1;
-            }
+        if kr != mach::KERN_SUCCESS {
+            return Err(TaskDumpError::Kernel {
+                syscall: "mach_vm_region_recurse",
+                error: kr.into(),
+            });
         }
 
         Ok(VMRegionInfo {

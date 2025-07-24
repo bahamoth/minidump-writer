@@ -184,37 +184,26 @@ impl TaskDumper {
     pub fn get_vm_region(&self, addr: u64) -> Result<VMRegionInfo, TaskDumpError> {
         let mut region_base = addr;
         let mut region_size = 0;
+        let mut nesting_level = 0;
         let mut info: mach::vm_region_submap_info_64 = unsafe { std::mem::zeroed() };
         let mut info_size = std::mem::size_of_val(&info) as u32;
-        let mut nesting_level = 0;
-        let mut kr = mach::KERN_INVALID_ADDRESS;
 
-        while kr != mach::KERN_SUCCESS {
-            // SAFETY: syscall
-            kr = unsafe {
-                mach::mach_vm_region_recurse(
-                    self.base.task,
-                    &mut region_base,
-                    &mut region_size,
-                    &mut nesting_level,
-                    &mut info as *mut _ as *mut i32,
-                    &mut info_size,
-                )
-            };
+        let kr = unsafe {
+            mach::mach_vm_region_recurse(
+                self.base.task,
+                &mut region_base,
+                &mut region_size,
+                &mut nesting_level,
+                &mut info as *mut _ as *mut i32,
+                &mut info_size,
+            )
+        };
 
-            if kr != mach::KERN_SUCCESS {
-                // The kernel will return KERN_INVALID_ADDRESS if the address
-                // is within a unmapped region, or after the end of the
-                // mapped region.  Either way, we can't read here.
-                return Err(TaskDumpError::Kernel {
-                    syscall: "mach_vm_region_recurse",
-                    error: kr.into(),
-                });
-            }
-
-            if info.is_submap != 0 {
-                nesting_level += 1;
-            }
+        if kr != mach::KERN_SUCCESS {
+            return Err(TaskDumpError::Kernel {
+                syscall: "mach_vm_region_recurse",
+                error: kr.into(),
+            });
         }
 
         Ok(VMRegionInfo {

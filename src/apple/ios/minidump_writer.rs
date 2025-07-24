@@ -64,7 +64,8 @@ impl MinidumpWriter {
     /// Writes a minidump to the specified destination
     pub fn dump(&mut self, destination: &mut (impl Write + Seek)) -> Result<Vec<u8>> {
         let mut buffer = DumpBuf::new(0);
-        let dumper = TaskDumper::new(self.task);
+        let dumper =
+            TaskDumper::new(self.task).map_err(|e| WriterError::TaskDumperError(e.to_string()))?;
 
         // Reserve space for header
         let header_size = std::mem::size_of::<MDRawHeader>();
