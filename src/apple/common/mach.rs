@@ -380,6 +380,8 @@ pub const MH_EXECUTE: u32 = 0x2;
 pub const MH_DYLINKER: u32 = 0x7;
 // usr/include/mach-o/loader.h, magic number for MachHeader
 pub const MH_MAGIC_64: u32 = 0xfeedfacf;
+// usr/include/mach-o/loader.h, swapped magic number for MachHeader (big-endian)
+pub const MH_CIGAM_64: u32 = 0xcffaedfe;
 
 /// Load command constants from usr/include/mach-o/loader.h
 #[repr(u32)]
