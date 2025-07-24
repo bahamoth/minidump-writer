@@ -24,6 +24,8 @@ pub enum WriterError {
     IoError(#[from] std::io::Error),
     #[error("Memory writer error: {0}")]
     MemoryWriterError(String),
+    #[error("Task dumper error: {0}")]
+    TaskDumperError(String),
 }
 
 pub struct MinidumpWriter {
@@ -97,7 +99,15 @@ impl MinidumpWriter {
             WriterError::DirectoryError(format!("Failed to write directory entry: {}", e))
         })?;
 
-        // TODO: Add other streams (memory list, etc.)
+        // Write memory list stream
+        let memory_list_dirent =
+            crate::apple::ios::streams::memory_list::write(self, &mut buffer, &dumper)
+                .map_err(WriterError::from)?;
+        dir_section.write_entry(memory_list_dirent).map_err(|e| {
+            WriterError::DirectoryError(format!("Failed to write directory entry: {}", e))
+        })?;
+
+        // TODO: Add other streams (module list, system info, etc.)
 
         // Write directory
         let directory_location = dir_section.position().map_err(|e| {

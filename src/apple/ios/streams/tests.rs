@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
     use super::super::*;
+    use crate::apple::ios::minidump_writer::MinidumpWriter;
+    use crate::apple::ios::task_dumper::TaskDumper;
     use crate::dir_section::DumpBuf;
     use crate::minidump_format::*;
 
@@ -339,5 +341,95 @@ mod tests {
         let ctx = crashed_thread_context.unwrap();
         assert!(ctx.rva > 0);
         assert!(ctx.data_size > 0);
+    }
+
+    #[test]
+    fn test_memory_list_stream() {
+        use crate::apple::ios::{MinidumpWriter, TaskDumper};
+
+        let mut writer = MinidumpWriter::new();
+        let dumper = TaskDumper::new(writer.task).unwrap();
+        let mut buffer = DumpBuf::new(0);
+
+        // First write thread list to populate memory_blocks
+        let result = thread_list::write(&mut writer, &mut buffer, &dumper);
+        assert!(result.is_ok());
+
+        // Verify we have some memory blocks from thread stacks
+        assert!(
+            !writer.memory_blocks.is_empty(),
+            "Should have collected thread stack memory"
+        );
+        let initial_blocks = writer.memory_blocks.len();
+
+        // Now write memory list
+        let memory_result = memory_list::write(&mut writer, &mut buffer, &dumper);
+        assert!(memory_result.is_ok());
+
+        let dirent = memory_result.unwrap();
+        assert_eq!(dirent.stream_type, MDStreamType::MemoryListStream as u32);
+        assert!(dirent.location.data_size > 0);
+
+        // Verify the stream structure
+        let bytes = buffer.as_bytes();
+        let offset = dirent.location.rva as usize;
+
+        // Read the memory block count
+        let block_count = unsafe {
+            let ptr = bytes.as_ptr().add(offset) as *const u32;
+            *ptr
+        };
+
+        // Should have at least the thread stacks
+        assert!(
+            block_count >= initial_blocks as u32,
+            "Memory list should contain at least {} blocks",
+            initial_blocks
+        );
+    }
+
+    #[test]
+    fn test_memory_list_with_exception() {
+        use crate::apple::ios::{
+            crash_context::{IosCrashContext, IosExceptionInfo},
+            MinidumpWriter, TaskDumper,
+        };
+
+        let mut writer = MinidumpWriter::new();
+        let task = writer.task;
+        let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
+
+        // Get current thread state for realistic crash context
+        let dumper = TaskDumper::new(task).unwrap();
+        let thread_state = dumper.read_thread_state(current_thread).unwrap();
+
+        // Create crash context with exception
+        let crash_context = IosCrashContext {
+            task,
+            thread: current_thread,
+            handler_thread: current_thread,
+            exception: Some(IosExceptionInfo {
+                kind: 1, // EXC_BAD_ACCESS
+                code: 1, // KERN_INVALID_ADDRESS
+                subcode: Some(0x1234),
+            }),
+            thread_state,
+        };
+
+        writer.crash_context = Some(crash_context);
+
+        let mut buffer = DumpBuf::new(0);
+
+        // Write thread list first
+        thread_list::write(&mut writer, &mut buffer, &dumper).unwrap();
+        let blocks_before = writer.memory_blocks.len();
+
+        // Write memory list - should include IP memory for exception
+        let result = memory_list::write(&mut writer, &mut buffer, &dumper);
+        assert!(result.is_ok());
+
+        // With an exception, we might have added memory around the IP
+        // (though it's not guaranteed if the IP region is inaccessible)
+        assert!(writer.memory_blocks.len() >= blocks_before);
     }
 }
