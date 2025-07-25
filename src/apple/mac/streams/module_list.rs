@@ -173,13 +173,13 @@ impl MinidumpWriter {
 
         let file_path = if is_current_process {
             // For current process, we can use dyld API to get reliable file paths
-            let image_count = unsafe { libc::_dyld_image_count() };
+            let image_count = unsafe { _dyld_image_count() };
             let mut found_path = None;
 
             for i in 0..image_count {
-                let header = unsafe { libc::_dyld_get_image_header(i) };
+                let header = unsafe { _dyld_get_image_header(i) };
                 if header as u64 == image.load_address {
-                    let name_ptr = unsafe { libc::_dyld_get_image_name(i) };
+                    let name_ptr = unsafe { _dyld_get_image_name(i) };
                     if !name_ptr.is_null() {
                         let c_str = unsafe { std::ffi::CStr::from_ptr(name_ptr) };
                         found_path = c_str.to_str().ok().map(String::from);
@@ -439,4 +439,12 @@ mod test {
         assert_eq!("/usr/lib/dyld", dyld.file_path.as_deref().unwrap());
         assert!(dyld.load_info.vm_size > 0);
     }
+}
+
+// dyld API bindings for macOS
+#[allow(non_snake_case)]
+extern "C" {
+    fn _dyld_image_count() -> u32;
+    fn _dyld_get_image_name(image_index: u32) -> *const libc::c_char;
+    fn _dyld_get_image_header(image_index: u32) -> *const libc::c_void;
 }

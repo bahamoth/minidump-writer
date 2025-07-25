@@ -35,11 +35,11 @@ impl MinidumpWriter {
             .exception
             .as_ref()
             .map(|exc| {
-                let code = exc.code as u64;
+                let code = exc.code;
 
                 // `EXC_CRASH` exceptions wrap other exceptions, so we want to
                 // retrieve the _actual_ exception
-                let wrapped_exc = if exc.kind as u32 == et::EXC_CRASH {
+                let wrapped_exc = if exc.kind == et::EXC_CRASH {
                     recover_exc_crash_wrapped_exception(code)
                 } else {
                     None
@@ -61,21 +61,20 @@ impl MinidumpWriter {
                 // +--------------------------------------------------------+
                 // |[63:61] resource type | [60:58] flavor | [57:32] unused |
                 // +--------------------------------------------------------+
-                let exception_code =
-                    if exc.kind as u32 == et::EXC_RESOURCE || exc.kind as u32 == et::EXC_GUARD {
-                        (code >> 32) as u32
-                    } else if let Some(wrapped) = wrapped_exc {
-                        wrapped.code
-                    } else {
-                        // For all other exceptions types, the value in the code
-                        // _should_ never exceed 32 bits, crashpad does an actual
-                        // range check here.
-                        if code > u32::MAX.into() {
-                            // TODO: do something more than logging?
-                            log::warn!("exception code {code:#018x} exceeds the expected 32 bits");
-                        }
-                        code as u32
-                    };
+                let exception_code = if exc.kind == et::EXC_RESOURCE || exc.kind == et::EXC_GUARD {
+                    (code >> 32) as u32
+                } else if let Some(wrapped) = wrapped_exc {
+                    wrapped.code
+                } else {
+                    // For all other exceptions types, the value in the code
+                    // _should_ never exceed 32 bits, crashpad does an actual
+                    // range check here.
+                    if code > u32::MAX.into() {
+                        // TODO: do something more than logging?
+                        log::warn!("exception code {code:#018x} exceeds the expected 32 bits");
+                    }
+                    code as u32
+                };
 
                 let exception_kind = if let Some(wrapped) = wrapped_exc {
                     wrapped.kind

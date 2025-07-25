@@ -565,6 +565,7 @@ mod mac {
 }
 
 fn main() -> Result<()> {
+    #[cfg(not(target_os = "ios"))]
     let args: Vec<_> = std::env::args().skip(1).collect();
 
     cfg_if::cfg_if! {
@@ -574,6 +575,8 @@ fn main() -> Result<()> {
             windows::real_main(args)
         } else if #[cfg(target_os = "macos")] {
             mac::real_main(args)
+        } else if #[cfg(target_os = "ios")] {
+            Err("External process testing is not supported on iOS due to sandbox restrictions".into())
         } else {
             unimplemented!();
         }
