@@ -60,7 +60,7 @@ Before claiming any task, agents must identify themselves:
 | T-004 | Create iOS system info collector | DONE   | architect-strange | R-009, #5 | Device model, OS version, architecture. **Architectural issues found**: 1) crash-context crate doesn't support iOS - need custom CrashContext, 2) Fixed platform ID from 0x8000 to PlatformId::Ios (0x8102) |
 | T-005 | Write iOS thread state dumper | DONE   | architect-strange | R-006 | ARM64 register state capture |
 | T-006 | Add iOS memory region mapper | DONE   | architect-t'challa | R-007 | Implemented memory list stream using existing get_vm_region for sandbox-safe memory access |
-| T-009 | Write iOS-specific tests | TODO   | - | R-012 | Unit and integration tests |
+| T-009 | Write iOS-specific tests | DOING   | architect-strange | R-012 | Unit and integration tests |
 | T-010 | Add iOS simulator support | TODO   | - | R-011 | Feature flag for x86_64 builds |
 | T-011 | Document iOS platform limitations | TODO   | - | R-013 | Update README and docs |
 | T-012 | Create iOS example app | TODO   | - | R-014 | Swift/ObjC integration demo |
@@ -82,6 +82,7 @@ Before claiming any task, agents must identify themselves:
 2025-07-24: T-005: Status TODO → DOING (claimed by architect-strange)
 2025-07-24: T-006: Status TODO → DOING (claimed by architect-t'challa)
 2025-07-24: T-006: Status DOING → DONE (completed by architect-t'challa)
+2025-07-25: T-009: Status TODO → DOING (claimed by architect-strange)
 ```
 
 ## Templates
