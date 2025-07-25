@@ -8,6 +8,10 @@ homepage = "https://github.com/rust-minidump/minidump-writer"
 edition = "2021"
 license = "MIT"
 
+[features]
+# Enable iOS code compilation on macOS for testing
+test-ios-on-macos = []
+
 [dependencies]
 bitflags = "2.8"
 byteorder = "1.4"
