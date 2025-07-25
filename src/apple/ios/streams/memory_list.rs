@@ -29,7 +29,7 @@ pub fn write(
                 // don't bother trying to write it.
                 let region = dumper.get_vm_region(ip).ok()?;
 
-                if ip < region.range.start || ip > region.range.end {
+                if ip < region.range.start || ip >= region.range.end {
                     return None;
                 }
 
