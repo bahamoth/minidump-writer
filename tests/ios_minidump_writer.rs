@@ -1,5 +1,5 @@
 //! iOS minidump writer tests
-//! 
+//!
 //! This file contains all iOS-related tests:
 //! - test module: Platform-independent tests that run anywhere
 //! - macos_tests module: Tests that require macOS with test-ios-on-macos feature
@@ -8,7 +8,7 @@
 mod test {
     // Test iOS data structures and constants without Mach API dependencies
     // These tests can run on any platform
-    
+
     use minidump_common::format::{ContextFlagsArm64Old, PlatformId};
     use minidump_writer::minidump_format::*;
 
@@ -196,7 +196,7 @@ mod test {
             name: &'static str,
         }
 
-        let mut modules = vec![
+        let mut modules = [
             MockModule {
                 load_address: 0x3000,
                 name: "module3",
@@ -243,7 +243,7 @@ mod test {
     #[test]
     fn test_stream_directory_ordering() {
         // Test that stream directory entries maintain order
-        let entries = vec![
+        let entries = [
             (MDStreamType::SystemInfoStream, 0x1000),
             (MDStreamType::ThreadListStream, 0x2000),
             (MDStreamType::ModuleListStream, 0x3000),
