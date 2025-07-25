@@ -9,7 +9,7 @@ cfg_if::cfg_if! {
         pub use windows::*;
     } else if #[cfg(any(target_os = "macos", target_os = "ios"))] {
         // New apple common module
-        mod apple;
+        pub mod apple;
 
         // Maintain backward compatibility for macOS
         #[cfg(target_os = "macos")]

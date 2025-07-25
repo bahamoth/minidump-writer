@@ -57,6 +57,19 @@ impl TaskDumper {
         self.base.read_threads()
     }
 
+    /// Read thread state for the specified thread
+    pub fn read_thread_state(&self, tid: u32) -> Result<mach::ThreadState, TaskDumpError> {
+        self.check_current_process()?;
+        let mut thread_state = mach::ThreadState::default();
+        mach_call!(mach::thread_get_state(
+            tid,
+            mach::THREAD_STATE_FLAVOR as i32,
+            thread_state.state.as_mut_ptr(),
+            &mut thread_state.state_size
+        ))?;
+        Ok(thread_state)
+    }
+
     /// Get images/modules loaded in the process using dyld API
     /// iOS 14.5+ restricts access to task_info(TASK_DYLD_INFO), so we use dyld APIs directly
     pub fn read_images(&self) -> Result<Vec<ImageInfo>, TaskDumpError> {
