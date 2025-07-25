@@ -5,5 +5,8 @@ pub mod common;
 #[cfg(target_os = "macos")]
 pub mod mac;
 
-#[cfg(target_os = "ios")]
+#[cfg(any(
+    target_os = "ios",
+    all(target_os = "macos", feature = "test-ios-on-macos")
+))]
 pub mod ios;
