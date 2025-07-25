@@ -1,6 +1,7 @@
 // iOS stream writers
 
 pub mod exception;
+pub mod memory_list;
 pub mod system_info;
 pub mod thread_list;
 

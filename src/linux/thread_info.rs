@@ -54,7 +54,7 @@ trait CommonThreadInfo {
         let mut ppid = -1;
         let mut tgid = -1;
 
-        let status_path = path::PathBuf::from(format!("/proc/{}/status", tid));
+        let status_path = path::PathBuf::from(format!("/proc/{tid}/status"));
         let status_file = std::fs::File::open(status_path)?;
         for line in io::BufReader::new(status_file).lines() {
             let l = line?;
@@ -79,7 +79,7 @@ trait CommonThreadInfo {
         }
         if ppid == -1 || tgid == -1 {
             return Err(ThreadInfoError::InvalidPid(
-                format!("/proc/{}/status", tid),
+                format!("/proc/{tid}/status"),
                 ppid,
                 tgid,
             ));

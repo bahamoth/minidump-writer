@@ -46,6 +46,104 @@ Strict adherence to the Google Breakpad minidump format ensures compatibility wi
 ### 5. Minimal Dependencies
 Platform implementations rely primarily on system APIs to reduce external dependencies and potential failure points.
 
+## 6. Essential References
+### Implementing Your Own Crash Reporter
+> Ref: https://developer.apple.com/forums/thread/113742
+
+#### 1. Preserve Apple Crash Report
+- Ensure custom crash reporter doesn't interfere with Apple's crash reporter
+- **Required Testing**: Verify both reporters work correctly across various crash scenarios
+
+#### 2. Signal Handling
+- **Use only async signal safe functions**
+- **Prohibited**: `malloc`, Objective-C, Swift
+- **Caution**: `backtrace()` is not async signal safe
+- Suspend all threads early in signal handler
+- **Exit strategy**: Unregister signal handler and return (never call `exit()`)
+
+#### 3. Memory Reading
+- Only access memory that's guaranteed safe in signal handler:
+- Handler code
+- Handler stack
+- Handler arguments
+- Immutable global state
+- Use `vm_read` for reading other memory safely
+
+#### 4. File Writing
+- **Only use low-level UNIX APIs**: `open`, `write`, `close`
+- File paths must be predetermined (cannot use `NSFileManager`)
+
+#### 5. Symbolication
+- **Never attempt symbolication within signal handler**
+- Record only the necessary information for offline symbolication:
+- Addresses to symbolicate
+- Mach-O image details (path, UUID, load address)
+
+#### 6. Essential Information to Include
+- Machine exception details
+- Memory access address (for access violations)
+- All thread backtraces (in consistent order)
+- Crashed thread identification and state
+- Complete Mach-O image list
+
+
+### Async Signal Safe Functions vs Dyld Lazy Binding
+> Ref: https://developer.apple.com/forums/thread/116571/
+
+#### The Problem
+
+##### Issue Description
+- `getpgrp()` is documented as async signal safe
+- However, it doesn't trap into kernel directly
+- Instead, it goes through multiple layers:
+- Stub function (inserted at link time)
+- Dyld helper function (`dyld_stub_binder`)
+- Symbol lookup in System framework
+- Actual `getpgrp()` call
+
+##### Lazy Binding Process
+- First call: `dyld_stub_binder` looks up symbol and patches stub
+- Subsequent calls: Direct call to the function
+- **Key Question**: Is `dyld_stub_binder` async signal safe?
+
+#### Potential Problems
+
+##### Dyld Internal Lock
+- Dyld uses recursive lock for internal data structures
+- Unlikely to deadlock (unlike `malloc` or Objective-C runtime)
+- Risk: Async signal might arrive when dyld data structures are inconsistent
+
+##### Deadlock Scenarios
+1. **Thread Suspension**
+- Suspended thread might be inside `dyld_stub_binder`
+- Might be holding dyld's recursive lock
+- Your thread calling async signal safe function → deadlock
+
+2. **Crash Reporter Implementation**
+- Signal handler suspends all threads except current
+- Increases risk of the above scenario
+
+#### The Solution
+
+##### Required Steps
+1. **Audit all code on async signal path**
+2. **Ensure only async signal safe functions are called**
+3. **Pre-bind all functions before installing signal handler**
+- Call each function elsewhere in program first
+- This triggers lazy binding before signal handler is active
+
+##### Important Note
+- Foundation's calls don't bind your stubs
+- Example: Foundation calling `read()` doesn't bind your program's `read()` stub
+- Each binary has its own stubs that need binding
+
+#### Warning
+- This discusses dyld implementation details
+- Implementation has changed many times
+- May change in future (possibly eliminating lazy binding entirely)
+- Current as of 2021-02-27
+
+
 ## Development Principles
 
 ### Platform-Independent Principles
