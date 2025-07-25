@@ -7,10 +7,34 @@ cfg_if::cfg_if! {
         mod windows;
 
         pub use windows::*;
-    } else if #[cfg(target_os = "macos")] {
-        mod mac;
+    } else if #[cfg(any(target_os = "macos", target_os = "ios"))] {
+        // New apple common module
+        mod apple;
 
+        // Maintain backward compatibility for macOS
+        #[cfg(target_os = "macos")]
+        pub mod mac {
+            // Re-export from apple::mac to maintain backward compatibility
+            pub use crate::apple::mac::*;
+        }
+
+        // Export platform-specific implementations
+        #[cfg(target_os = "macos")]
         pub use mac::*;
+
+        // Maintain backward compatibility - re-export modules with original names
+        #[cfg(target_os = "macos")]
+        pub mod minidump_writer {
+            pub use crate::apple::mac::MinidumpWriter;
+        }
+
+        #[cfg(target_os = "macos")]
+        pub mod task_dumper {
+            pub use crate::apple::mac::TaskDumper;
+        }
+
+        #[cfg(target_os = "ios")]
+        pub use apple::ios::*;
     }
 }
 
