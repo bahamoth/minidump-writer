@@ -236,7 +236,7 @@ impl MappingInfo {
                     .as_ref()
                     .read_u64::<NativeEndian>()
                     .map(|u| u as usize),
-                x => panic!("Unexpected type width: {}", x),
+                x => panic!("Unexpected type width: {x}"),
             };
             if let Ok(addr) = addr {
                 if low_addr <= addr && addr <= high_addr {

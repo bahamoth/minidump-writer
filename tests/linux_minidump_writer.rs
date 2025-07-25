@@ -495,7 +495,7 @@ contextual_test! {
         let mut expected = HashSet::new();
         expected.insert("test".to_string());
         for id in 1..num_of_threads {
-            expected.insert(format!("thread_{}", id));
+            expected.insert(format!("thread_{id}"));
         }
         assert_eq!(expected, names);
     }
