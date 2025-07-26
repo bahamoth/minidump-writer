@@ -57,11 +57,11 @@ pub fn write_system_info(buffer: &mut DumpBuf) -> Result<MDRawDirectory, SystemI
         if cfg!(target_arch = "x86_64") {
             MDCPUArchitecture::PROCESSOR_ARCHITECTURE_AMD64
         } else {
-            MDCPUArchitecture::PROCESSOR_ARCHITECTURE_ARM64_OLD
+            MDCPUArchitecture::PROCESSOR_ARCHITECTURE_ARM64
         }
     } else {
         // Real iOS devices are always ARM64 (or ARM64e for newer devices)
-        MDCPUArchitecture::PROCESSOR_ARCHITECTURE_ARM64_OLD
+        MDCPUArchitecture::PROCESSOR_ARCHITECTURE_ARM64
     };
 
     // Get CPU family information
