@@ -11,8 +11,7 @@ license = "MIT"
 [features]
 # Enable iOS code compilation on macOS for testing
 test-ios-on-macos = []
-# Enable iOS simulator specific handling
-ios-simulator = []
+# (Removed the ios-simulator feature flag as it is redundant and unused)
 
 [dependencies]
 bitflags = "2.8"
