@@ -9,7 +9,7 @@ fn main() {
         // Examples:
         // - x86_64-apple-ios-sim
         // - aarch64-apple-ios-sim
-        if target.contains("ios") && target.contains("sim") {
+        if target.ends_with("-apple-ios-sim") {
             println!("cargo:rustc-cfg=ios_simulator");
         }
     }
