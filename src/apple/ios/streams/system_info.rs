@@ -1,7 +1,7 @@
 use crate::apple::common::mach;
-use crate::mem_writer::{DumpBuf, MemoryWriter};
+use crate::dir_section::DumpBuf;
+use crate::mem_writer::{write_string_to_location, MemoryWriter};
 use crate::minidump_format::*;
-use crate::minidump_writer::write_string_to_location;
 
 /// iOS-specific error type for system info operations
 #[derive(Debug, thiserror::Error)]
@@ -51,8 +51,18 @@ pub fn write_system_info(buffer: &mut DumpBuf) -> Result<MDRawDirectory, SystemI
     let cpu: format::CPU_INFORMATION = unsafe { std::mem::zeroed() };
     // Note: iOS doesn't expose the same CPU features as macOS x86_64
 
-    // iOS is always ARM64 (or ARM64e for newer devices)
-    let processor_architecture = MDCPUArchitecture::PROCESSOR_ARCHITECTURE_ARM64_OLD;
+    // Determine processor architecture based on target
+    let processor_architecture = if cfg!(ios_simulator) {
+        // Simulator can be either x86_64 (Intel Mac) or ARM64 (Apple Silicon Mac)
+        if cfg!(target_arch = "x86_64") {
+            MDCPUArchitecture::PROCESSOR_ARCHITECTURE_AMD64
+        } else {
+            MDCPUArchitecture::PROCESSOR_ARCHITECTURE_ARM64_OLD
+        }
+    } else {
+        // Real iOS devices are always ARM64 (or ARM64e for newer devices)
+        MDCPUArchitecture::PROCESSOR_ARCHITECTURE_ARM64_OLD
+    };
 
     // Get CPU family information
     let family: u32 = mach::sysctl_by_name(b"hw.cpufamily\0");
