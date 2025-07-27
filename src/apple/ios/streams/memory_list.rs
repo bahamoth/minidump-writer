@@ -1,6 +1,7 @@
 use crate::{
     apple::ios::{minidump_writer::MinidumpWriter, task_dumper::TaskDumper},
-    mem_writer::{DumpBuf, MemoryArrayWriter, MemoryWriter},
+    dir_section::DumpBuf,
+    mem_writer::{MemoryArrayWriter, MemoryWriter},
     minidump_format::{
         MDLocationDescriptor, MDMemoryDescriptor, MDRawDirectory, MDStreamType::MemoryListStream,
     },
@@ -53,7 +54,7 @@ pub fn write(
                         data_size: stack_buffer.len() as u32,
                         rva: buffer.position() as u32,
                     };
-                    buffer.write_all(&stack_buffer)?;
+                    buffer.write_all(&stack_buffer);
 
                     config.memory_blocks.push(MDMemoryDescriptor {
                         start_of_memory_range: ip_range.start,

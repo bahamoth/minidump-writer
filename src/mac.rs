@@ -11,3 +11,6 @@ pub mod mach;
 pub mod minidump_writer;
 mod streams;
 pub mod task_dumper;
+
+#[cfg(test)]
+mod test_system_info;
