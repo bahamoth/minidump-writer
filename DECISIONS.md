@@ -90,8 +90,70 @@ Every decision MUST record participating agents using the role-name format:
 ## Index
 | ID | Date | Title | Status | Decider | Relates-To |
 |----|------|-------|--------|---------|------------|
+| D-2025-07-28-01 | 2025-07-28 | Thread Priority Handling in iOS/macOS Minidumps | Approved | reviewer-ritchie | T-009 |
 | D-2025-07-18-01 | 2025-07-18 | Apple Common Module Restructuring | Approved | architect-stark | T-001, PR#1 |
 | D-2025-07-17-01 | 2025-07-17 | iOS Architecture Pattern Selection | Approved | architect-claude | R-100, R-101, R-102 |
+
+---
+
+## D-2025-07-28-01 - Thread Priority Handling in iOS/macOS Minidumps
+
+**Status**: Approved  
+**Date**: 2025-07-28  
+**Participants**:
+  - Proposers: dev-zatanna, reviewer-ritchie
+  - Decider: reviewer-ritchie
+  - Implementer: dev-zatanna
+
+**Context**: 
+macOS/iOS does not provide direct thread priority values like Windows. The THREAD_BASIC_INFO structure only contains a `policy` field that indicates the scheduling algorithm (TIMESHARE, FIFO, RR), not the actual priority. Getting actual priority requires additional thread_info() calls with policy-specific flavors, which adds complexity and potential failure points.
+
+**Options Considered**:
+1. **Use policy field as proxy for priority** (implemented by dev-zatanna)
+   - Store scheduling policy (0-2) in MDRawThread.priority field
+   - Pros: Simple implementation, no extra syscalls, avoids potential failures
+   - Cons: Not actual priority value, may confuse cross-platform analysis tools
+
+2. **Make additional syscalls for actual priority** (considered)
+   - Call thread_info() again with THREAD_SCHED_TIMESHARE_INFO/FIFO_INFO/RR_INFO
+   - Extract cur_priority field (0-127 range)
+   - Pros: More accurate priority representation
+   - Cons: Extra syscalls per thread, complex error handling, performance impact
+
+3. **Store zero in priority field** (considered)
+   - Set priority to 0 for all threads
+   - Pros: Clear that priority is not available
+   - Cons: Loses any thread scheduling information
+
+**Decision**: 
+Selected Option 1: Use policy field as proxy for priority. This provides some thread scheduling information without adding complexity or failure points.
+
+**Rationale**:
+- Minidump generation should be fast and reliable, especially during crash handling
+- Additional syscalls per thread could impact performance and add failure points
+- The policy field still provides useful information about thread scheduling behavior
+- Cross-platform tools already need OS-specific interpretation of priority values
+- Comment clearly documents the limitation for consumers
+
+**Consequences**:
+- Positive: Simple, reliable implementation without extra syscalls
+- Positive: Maintains some thread scheduling information
+- Negative: Priority field doesn't contain actual priority values
+- Negative: May require education for minidump consumers about platform differences
+- Follow-up: Document this behavior in public API documentation
+
+**Implementation Note**:
+The code includes a detailed comment explaining this decision:
+```rust
+// Priority is a complex calculation on macOS/iOS. The `policy` field is used here as a proxy for `priority`
+// because macOS/iOS does not provide a direct thread priority value. The `policy` field represents the
+// scheduling policy of the thread (e.g., timesharing, fixed priority, etc.), and its numeric value can
+// vary depending on the system's implementation. Consumers of this value should be aware that it is not
+// a direct priority metric but rather an approximation based on the thread's scheduling policy.
+```
+
+**Relates-To**: T-009 (iOS minidump writer implementation)
+**Supersedes**: None
 
 ---
 
@@ -200,6 +262,60 @@ Selected Option 2: Self-Process Only with Signal Safety. This approach respects 
 - Follow-up: Implement pre-allocated buffer system (T-201), signal-safe writers (T-202)
 
 **Relates-To**: R-100, R-101, R-102
+**Supersedes**: None
+
+---
+
+## D-2025-07-28-01 - Function Pre-binding for Signal Safety
+
+**Status**: Approved
+**Date**: 2025-07-28
+**Participants**:
+  - Proposers: architect-vision
+  - Decider: architect-vision
+  - Implementer: TBD
+
+**Context**: 
+Code review of PR #12 raised concerns about signal safety. ARCHITECTURE.md documents the dyld lazy binding issue where calling functions for the first time in a signal handler can cause deadlocks. Current implementation lacks pre-binding mechanism despite being documented as required.
+
+**Options Considered**:
+1. **Ignore Pre-binding** (current state)
+   - Leave as-is, rely on luck that functions are already bound
+   - Pros: No implementation work needed
+   - Cons: Risk of deadlock in production, violates documented architecture
+
+2. **Manual Pre-binding in Library** (proposed)
+   - Provide prebind_minidump_functions() that users must call
+   - Pros: Explicit control, clear documentation, testable
+   - Cons: Users might forget to call it
+
+3. **Automatic Pre-binding** (alternative)
+   - Pre-bind on first MinidumpWriter instantiation
+   - Pros: Users can't forget, transparent
+   - Cons: Overhead on first use, might be too late if crash happens early
+
+**Decision**: 
+Selected Option 2: Manual Pre-binding in Library. Provide a dedicated function that pre-binds all functions used in signal-safe paths.
+
+**Rationale**:
+- Signal handler installation timing is application-specific
+- Pre-binding must happen before signal handler installation
+- Explicit API makes the requirement clear and testable
+- Follows principle of least surprise - no hidden behavior
+
+**Consequences**:
+- Positive: Eliminates dyld deadlock risk, follows documented architecture
+- Positive: Clear API contract for signal-safe usage
+- Negative: Users must remember to call pre-binding function
+- Follow-up: Add pre-binding implementation (T-016), update documentation
+
+**Implementation Requirements**:
+- Create apple::common::signal_safety module
+- Implement prebind_minidump_functions() for macOS/iOS
+- Document in API docs and examples
+- Add tests to verify pre-binding effectiveness
+
+**Relates-To**: T-016, ARCHITECTURE.md section on async signal safety
 **Supersedes**: None
 
 ---

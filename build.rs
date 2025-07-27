@@ -11,6 +11,7 @@ fn main() {
         // - aarch64-apple-ios-sim
         if target.ends_with("-apple-ios-sim") {
             println!("cargo:rustc-cfg=ios_simulator");
+            println!("cargo:rustc-check-cfg=cfg(ios_simulator)");
         }
     }
 }

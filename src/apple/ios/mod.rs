@@ -2,10 +2,10 @@
 
 mod crash_context;
 mod minidump_writer;
-mod streams;
+pub mod streams;
 mod task_dumper;
 
 // iOS-specific exports
-pub use crash_context::*;
+pub use crash_context::{IosCrashContext, IosExceptionInfo};
 pub use minidump_writer::{MinidumpWriter, WriterError};
-pub use task_dumper::TaskDumper;
+pub use task_dumper::{thread_basic_info, TaskDumper};

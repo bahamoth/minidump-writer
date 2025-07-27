@@ -7,9 +7,11 @@ use crate::minidump_format::*;
 #[derive(Debug, thiserror::Error)]
 pub enum SystemInfoError {
     #[error("Failed to allocate memory for system info")]
-    AllocationError,
+    Allocation,
     #[error("Failed to write system info to buffer")]
-    WriteError,
+    Write,
+    #[error("Memory writer error: {0}")]
+    MemoryWriter(#[from] crate::mem_writer::MemoryWriterError),
 }
 
 /// Retrieve the iOS version information.
@@ -37,9 +39,8 @@ fn build_version() -> String {
 
 /// Writes the system info stream for iOS.
 pub fn write_system_info(buffer: &mut DumpBuf) -> Result<MDRawDirectory, SystemInfoError> {
-    let mut info_section = MemoryWriter::<MDRawSystemInfo>::alloc(buffer)
-        .map_err(|_| SystemInfoError::AllocationError)?;
-
+    // Allocate space for MDRawSystemInfo using MemoryWriter
+    let mut info_section = MemoryWriter::<MDRawSystemInfo>::alloc(buffer)?;
     let dirent = MDRawDirectory {
         stream_type: MDStreamType::SystemInfoStream as u32,
         location: info_section.location(),
@@ -49,19 +50,14 @@ pub fn write_system_info(buffer: &mut DumpBuf) -> Result<MDRawDirectory, SystemI
 
     // SAFETY: POD buffer
     let cpu: format::CPU_INFORMATION = unsafe { std::mem::zeroed() };
-    // Note: iOS doesn't expose the same CPU features as macOS x86_64
 
     // Determine processor architecture based on target
-    let processor_architecture = if cfg!(ios_simulator) {
-        // Simulator can be either x86_64 (Intel Mac) or ARM64 (Apple Silicon Mac)
-        if cfg!(target_arch = "x86_64") {
-            MDCPUArchitecture::PROCESSOR_ARCHITECTURE_AMD64
-        } else {
-            MDCPUArchitecture::PROCESSOR_ARCHITECTURE_ARM64
-        }
+    let processor_architecture = if cfg!(target_os = "ios") && cfg!(target_arch = "x86_64") {
+        // iOS simulator on Intel Mac
+        MDCPUArchitecture::PROCESSOR_ARCHITECTURE_AMD64
     } else {
-        // Real iOS devices are always ARM64 (or ARM64e for newer devices)
-        MDCPUArchitecture::PROCESSOR_ARCHITECTURE_ARM64
+        // Real iOS devices or ARM64 simulator
+        MDCPUArchitecture::PROCESSOR_ARCHITECTURE_ARM64_OLD
     };
 
     // Get CPU family information
@@ -72,9 +68,11 @@ pub fn write_system_info(buffer: &mut DumpBuf) -> Result<MDRawDirectory, SystemI
     let processor_revision = (family & 0x0000ffff) as u16;
 
     let (major_version, minor_version, build_number) = ios_version();
-    let os_version_loc = write_string_to_location(buffer, &build_version())
-        .map_err(|_| SystemInfoError::WriteError)?;
 
+    // Write the OS build version string and get its location
+    let os_version_loc = write_string_to_location(buffer, &build_version())?;
+
+    // Create the system info structure following Microsoft's official layout
     let info = MDRawSystemInfo {
         // CPU
         processor_architecture: processor_architecture as u16,
@@ -95,9 +93,8 @@ pub fn write_system_info(buffer: &mut DumpBuf) -> Result<MDRawDirectory, SystemI
         reserved2: 0,
     };
 
-    info_section
-        .set_value(buffer, info)
-        .map_err(|_| SystemInfoError::WriteError)?;
+    // Write the struct using MemoryWriter which handles serialization via scroll
+    info_section.set_value(buffer, info)?;
 
     Ok(dirent)
 }

@@ -9,8 +9,22 @@ use mach2::mach_types as mt;
 /// dyld all image infos version we support
 const DYLD_ALL_IMAGE_INFOS_VERSION: u32 = 1;
 
+/// Thread basic info structure for iOS
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct thread_basic_info {
+    pub user_time: libc::time_value_t,
+    pub system_time: libc::time_value_t,
+    pub cpu_usage: libc::integer_t,
+    pub policy: libc::policy_t,
+    pub run_state: libc::integer_t,
+    pub flags: libc::integer_t,
+    pub suspend_count: libc::integer_t,
+    pub sleep_time: libc::integer_t,
+}
+
 /// Implementation of ThreadInfo trait for thread_basic_info
-impl mach::ThreadInfo for mach2::thread_basic_info::thread_basic_info_t {
+impl mach::ThreadInfo for thread_basic_info {
     /// THREAD_BASIC_INFO
     const FLAVOR: u32 = 3;
 }

@@ -60,11 +60,14 @@ Before claiming any task, agents must identify themselves:
 | T-004 | Create iOS system info collector | DONE   | architect-strange | R-009, #5 | Device model, OS version, architecture. **Architectural issues found**: 1) crash-context crate doesn't support iOS - need custom CrashContext, 2) Fixed platform ID from 0x8000 to PlatformId::Ios (0x8102) |
 | T-005 | Write iOS thread state dumper | DONE   | architect-strange | R-006 | ARM64 register state capture |
 | T-006 | Add iOS memory region mapper | DONE   | architect-t'challa | R-007 | Implemented memory list stream using existing get_vm_region for sandbox-safe memory access |
-| T-009 | Write iOS-specific tests | DOING   | architect-strange | R-012 | Unit and integration tests |
+| T-009 | Write iOS-specific tests | DOING  | architect-forge | R-012 | Unit and integration tests. Refactoring implementation to fix underlying issues.
 | T-010 | Add iOS simulator support | TODO   | - | R-011 | Feature flag for x86_64 builds |
 | T-011 | Document iOS platform limitations | TODO   | - | R-013 | Update README and docs |
 | T-012 | Create iOS example app | TODO   | - | R-014 | Swift/ObjC integration demo |
 | T-013 | Implement iOS CrashContext | DONE   | architect-forge | R-001, R-002 | **BLOCKER**: crash-context crate doesn't support iOS. Need custom implementation for iOS MinidumpWriter |
+| T-014 | Fix iOS implementation compilation errors | DONE   | architect-forge | T-010, D-2025-07-18-01 | Merged into T-009. Was: Fix import paths, API compatibility, and architecture issues preventing iOS simulator builds |
+| T-015 | Refactor iOS stream count to dynamic calculation | TODO   | - | #12 | Currently hardcoded as 4. Should follow macOS pattern using writers array for better maintainability |
+| T-016 | Implement function pre-binding for signal safety | TODO   | - | D-2025-07-28-01 | Pre-bind all lazy-bound functions before signal handler installation to avoid dyld deadlocks. Required for both macOS and iOS implementations per ARCHITECTURE.md guidelines |
 
 
 ### Task Assignment History
@@ -83,6 +86,12 @@ Before claiming any task, agents must identify themselves:
 2025-07-24: T-006: Status TODO → DOING (claimed by architect-t'challa)
 2025-07-24: T-006: Status DOING → DONE (completed by architect-t'challa)
 2025-07-25: T-009: Status TODO → DOING (claimed by architect-strange)
+2025-07-26: T-014: Created task for fixing iOS compilation errors
+2025-07-26: T-014: Status TODO → DOING (claimed by architect-forge)
+2025-07-27: T-009: Assignee architect-strange → architect-forge (taking over to fix underlying test issues)
+2025-07-27: T-014: Status DOING → Dropped (merged into T-009)
+2025-07-28: T-015: Created task for iOS stream count refactoring based on PR review feedback
+2025-07-28: T-016: Created task for function pre-binding implementation (architect-vision)
 ```
 
 ## Templates
