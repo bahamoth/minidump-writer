@@ -1,6 +1,7 @@
 use crate::{
     apple::ios::{minidump_writer::MinidumpWriter, task_dumper::TaskDumper},
-    mem_writer::{DumpBuf, MemoryArrayWriter, MemoryWriter},
+    dir_section::DumpBuf,
+    mem_writer::{MemoryArrayWriter, MemoryWriter},
     minidump_cpu::RawContextCPU,
     minidump_format::{
         MDLocationDescriptor, MDMemoryDescriptor, MDRawDirectory, MDRawThread,
@@ -42,7 +43,12 @@ pub fn write(
     for (idx, &tid) in threads.iter().enumerate() {
         let mut thread = MDRawThread {
             thread_id: tid,
-            ..Default::default()
+            suspend_count: 0,
+            priority_class: 0,
+            priority: 0,
+            teb: 0,
+            stack: MDMemoryDescriptor::default(),
+            thread_context: MDLocationDescriptor::default(),
         };
 
         // Handle thread state and context
@@ -77,7 +83,7 @@ pub fn write(
 
         // Try to get thread priority and suspend count
         if let Ok(basic_info) =
-            dumper.thread_info::<mach2::thread_basic_info::thread_basic_info_t>(tid)
+            dumper.thread_info::<crate::apple::ios::task_dumper::thread_basic_info>(tid)
         {
             thread.suspend_count = basic_info.suspend_count as u32;
             // Priority is a complex calculation on macOS/iOS. The `policy` field is used here as a proxy for `priority`
@@ -106,7 +112,7 @@ fn write_stack_from_start_address(
 ) -> Result<()> {
     thread.stack.start_of_memory_range = start;
     thread.stack.memory.data_size = 0;
-    thread.stack.memory.rva = buffer.position() as u32;
+    thread.stack.memory.rva = 0; // Will be set when memory is actually written
 
     let stack_size = calculate_stack_size(start, dumper);
 
@@ -120,15 +126,15 @@ fn write_stack_from_start_address(
     let stack_location = if stack_size != 0 {
         dumper
             .read_task_memory::<u8>(start, stack_size)
+            .ok()
             .map(|stack_buffer| {
                 let stack_location = MDLocationDescriptor {
                     data_size: stack_buffer.len() as u32,
                     rva: buffer.position() as u32,
                 };
-                buffer.write_all(&stack_buffer)?;
+                buffer.write_all(&stack_buffer);
                 stack_location
             })
-            .ok()
     } else {
         None
     };

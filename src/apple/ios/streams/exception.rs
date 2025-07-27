@@ -1,6 +1,7 @@
 use crate::{
     apple::ios::minidump_writer::MinidumpWriter,
-    mem_writer::{DumpBuf, MemoryWriter},
+    dir_section::DumpBuf,
+    mem_writer::MemoryWriter,
     minidump_format::{
         MDException, MDLocationDescriptor, MDRawDirectory, MDRawExceptionStream,
         MDStreamType::ExceptionStream,
@@ -17,7 +18,7 @@ pub fn write(
     let exception_record = if let Some(context) = &config.crash_context {
         if let Some(exception) = &context.exception {
             MDException {
-                exception_code: exception.kind as u32,
+                exception_code: exception.kind,
                 exception_flags: exception.code as u32, // Truncation is acceptable here
                 exception_address: exception.subcode.unwrap_or(0),
                 ..Default::default()
@@ -29,10 +30,7 @@ pub fn write(
         MDException::default()
     };
 
-    let crashed_thread_id = config
-        .crash_context
-        .as_ref()
-        .map_or(0, |ctx| ctx.thread as u32);
+    let crashed_thread_id = config.crash_context.as_ref().map_or(0, |ctx| ctx.thread);
 
     let stream = MDRawExceptionStream {
         thread_id: crashed_thread_id,

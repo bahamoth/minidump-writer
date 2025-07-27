@@ -2,7 +2,10 @@ use crate::{
     apple::ios::{crash_context::IosCrashContext, task_dumper::TaskDumper},
     dir_section::{DirSection, DumpBuf},
     mem_writer::*,
-    minidump_format::{self, MDMemoryDescriptor, MDRawDirectory, MDRawHeader},
+    minidump_format::{
+        format::{MINIDUMP_SIGNATURE, MINIDUMP_VERSION},
+        MDMemoryDescriptor, MDRawHeader,
+    },
 };
 use std::io::{Seek, Write};
 
@@ -65,66 +68,24 @@ impl MinidumpWriter {
 
     /// Writes a minidump to the specified destination
     pub fn dump(&mut self, destination: &mut (impl Write + Seek)) -> Result<Vec<u8>> {
-        let mut buffer = DumpBuf::new(0);
+        let mut buffer = DumpBuf::with_capacity(0);
         let dumper =
             TaskDumper::new(self.task).map_err(|e| WriterError::TaskDumperError(e.to_string()))?;
 
         // Reserve space for header
-        let header_size = std::mem::size_of::<MDRawHeader>();
-        buffer
-            .reserve(header_size)
+        let mut header_section = MemoryWriter::<MDRawHeader>::alloc(&mut buffer)
             .map_err(|e| WriterError::MemoryWriterError(e.to_string()))?;
 
-        let mut dir_section = DirSection::new(&mut buffer, 0, destination).map_err(|e| {
-            WriterError::DirectoryError(format!("Failed to create directory section: {}", e))
+        let mut dir_section = DirSection::new(&mut buffer, 4, destination).map_err(|e| {
+            WriterError::DirectoryError(format!("Failed to create directory section: {e}"))
         })?;
 
-        // Write thread list stream first to get the context
-        let (thread_list_dirent, crashing_thread_context) =
-            crate::apple::ios::streams::thread_list::write(self, &mut buffer, &dumper)
-                .map_err(WriterError::from)?;
-
-        // Write exception stream
-        let dirent = crate::apple::ios::streams::exception::write(
-            self,
-            &mut buffer,
-            crashing_thread_context,
-        )
-        .map_err(WriterError::from)?;
-        dir_section.write_entry(dirent).map_err(|e| {
-            WriterError::DirectoryError(format!("Failed to write directory entry: {}", e))
-        })?;
-
-        dir_section.write_entry(thread_list_dirent).map_err(|e| {
-            WriterError::DirectoryError(format!("Failed to write directory entry: {}", e))
-        })?;
-
-        // Write memory list stream
-        let memory_list_dirent =
-            crate::apple::ios::streams::memory_list::write(self, &mut buffer, &dumper)
-                .map_err(WriterError::from)?;
-        dir_section.write_entry(memory_list_dirent).map_err(|e| {
-            WriterError::DirectoryError(format!("Failed to write directory entry: {}", e))
-        })?;
-
-        // TODO: Add other streams (module list, system info, etc.)
-
-        // Write directory
-        let directory_location = dir_section.position().map_err(|e| {
-            WriterError::DirectoryError(format!("Failed to get directory position: {}", e))
-        })?;
-        dir_section
-            .write_to_buffer(&mut buffer, None)
-            .map_err(|e| {
-                WriterError::DirectoryError(format!("Failed to write directory to buffer: {}", e))
-            })?;
-
-        // Write header
+        // Write header first
         let header = MDRawHeader {
-            signature: minidump_format::MINIDUMP_SIGNATURE,
-            version: minidump_format::MINIDUMP_VERSION,
-            stream_count: dir_section.count(),
-            stream_directory_rva: directory_location.rva,
+            signature: MINIDUMP_SIGNATURE,
+            version: MINIDUMP_VERSION,
+            stream_count: 4, // system info, exception, thread list, memory list
+            stream_directory_rva: dir_section.position(),
             checksum: 0, // TODO: Calculate checksum
             time_date_stamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -134,15 +95,61 @@ impl MinidumpWriter {
         };
 
         // Write header at the beginning
-        buffer
-            .write_at(header, 0)
+        header_section
+            .set_value(&mut buffer, header)
             .map_err(|e| WriterError::MemoryWriterError(e.to_string()))?;
 
-        // Write to destination
-        let bytes = buffer.as_bytes();
-        destination.write_all(&bytes)?;
+        // Ensure the header gets flushed to destination
+        dir_section
+            .write_to_file(&mut buffer, None)
+            .map_err(|e| WriterError::DirectoryError(format!("Failed to flush header: {e}")))?;
 
-        Ok(bytes.to_vec())
+        // Write system info stream
+        let system_info_dirent =
+            crate::apple::ios::streams::system_info::write_system_info(&mut buffer)
+                .map_err(WriterError::from)?;
+        dir_section
+            .write_to_file(&mut buffer, Some(system_info_dirent))
+            .map_err(|e| {
+                WriterError::DirectoryError(format!("Failed to write directory entry: {e}"))
+            })?;
+
+        // Write thread list stream first to get the context
+        let (thread_list_dirent, crashing_thread_context) =
+            crate::apple::ios::streams::thread_list::write(self, &mut buffer, &dumper)
+                .map_err(WriterError::from)?;
+
+        dir_section
+            .write_to_file(&mut buffer, Some(thread_list_dirent))
+            .map_err(|e| {
+                WriterError::DirectoryError(format!("Failed to write directory entry: {e}"))
+            })?;
+
+        // Write exception stream
+        let dirent = crate::apple::ios::streams::exception::write(
+            self,
+            &mut buffer,
+            crashing_thread_context,
+        )
+        .map_err(WriterError::from)?;
+        dir_section
+            .write_to_file(&mut buffer, Some(dirent))
+            .map_err(|e| {
+                WriterError::DirectoryError(format!("Failed to write directory entry: {e}"))
+            })?;
+
+        // Write memory list stream
+        let memory_list_dirent =
+            crate::apple::ios::streams::memory_list::write(self, &mut buffer, &dumper)
+                .map_err(WriterError::from)?;
+        dir_section
+            .write_to_file(&mut buffer, Some(memory_list_dirent))
+            .map_err(|e| {
+                WriterError::DirectoryError(format!("Failed to write directory entry: {e}"))
+            })?;
+
+        let result: Vec<u8> = buffer.into();
+        Ok(result)
     }
 }
 
