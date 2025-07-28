@@ -27,12 +27,19 @@ if [ -z "$DEVICE_ID" ]; then
     
     # Extract device ID if creation succeeded
     if echo "$DEVICE_ID" | grep -q "Invalid device type"; then
-        # Try with specific device type
-        DEVICE_TYPE=$(xcrun simctl list devicetypes | grep "iPhone SE" | head -1 | awk -F' (' '{print $2}' | tr -d ')')
+        # Try with specific device type - extract the identifier in parentheses
+        DEVICE_TYPE=$(xcrun simctl list devicetypes | grep "iPhone SE" | head -1 | sed 's/.*(\(.*\))/\1/')
+        if [ -z "$DEVICE_TYPE" ]; then
+            # Try any iPhone device type
+            DEVICE_TYPE=$(xcrun simctl list devicetypes | grep iPhone | head -1 | sed 's/.*(\(.*\))/\1/')
+        fi
+        
         if [ -n "$DEVICE_TYPE" ]; then
             DEVICE_ID=$(xcrun simctl create "$DEVICE_NAME" "$DEVICE_TYPE" "$RUNTIME")
         else
             echo "Error: Could not find suitable device type" >&2
+            echo "Available device types:" >&2
+            xcrun simctl list devicetypes >&2
             exit 1
         fi
     fi
