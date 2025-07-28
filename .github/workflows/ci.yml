@@ -148,7 +148,11 @@ jobs:
         with:
           targets: aarch64-apple-ios-sim
       - name: List available iOS runtimes
-        run: xcrun simctl list runtimes iOS
+        run: |
+          echo "=== All available runtimes ==="
+          xcrun simctl list runtimes
+          echo "=== Available devices ==="
+          xcrun simctl list devices available
       - name: Build tests
         run: cargo test --target aarch64-apple-ios-sim --features test-ios-on-macos --no-run
       - name: Run tests
