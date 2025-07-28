@@ -266,6 +266,60 @@ Selected Option 2: Self-Process Only with Signal Safety. This approach respects 
 
 ---
 
+## D-2025-07-28-01 - Function Pre-binding for Signal Safety
+
+**Status**: Approved
+**Date**: 2025-07-28
+**Participants**:
+  - Proposers: architect-vision
+  - Decider: architect-vision
+  - Implementer: TBD
+
+**Context**: 
+Code review of PR #12 raised concerns about signal safety. ARCHITECTURE.md documents the dyld lazy binding issue where calling functions for the first time in a signal handler can cause deadlocks. Current implementation lacks pre-binding mechanism despite being documented as required.
+
+**Options Considered**:
+1. **Ignore Pre-binding** (current state)
+   - Leave as-is, rely on luck that functions are already bound
+   - Pros: No implementation work needed
+   - Cons: Risk of deadlock in production, violates documented architecture
+
+2. **Manual Pre-binding in Library** (proposed)
+   - Provide prebind_minidump_functions() that users must call
+   - Pros: Explicit control, clear documentation, testable
+   - Cons: Users might forget to call it
+
+3. **Automatic Pre-binding** (alternative)
+   - Pre-bind on first MinidumpWriter instantiation
+   - Pros: Users can't forget, transparent
+   - Cons: Overhead on first use, might be too late if crash happens early
+
+**Decision**: 
+Selected Option 2: Manual Pre-binding in Library. Provide a dedicated function that pre-binds all functions used in signal-safe paths.
+
+**Rationale**:
+- Signal handler installation timing is application-specific
+- Pre-binding must happen before signal handler installation
+- Explicit API makes the requirement clear and testable
+- Follows principle of least surprise - no hidden behavior
+
+**Consequences**:
+- Positive: Eliminates dyld deadlock risk, follows documented architecture
+- Positive: Clear API contract for signal-safe usage
+- Negative: Users must remember to call pre-binding function
+- Follow-up: Add pre-binding implementation (T-016), update documentation
+
+**Implementation Requirements**:
+- Create apple::common::signal_safety module
+- Implement prebind_minidump_functions() for macOS/iOS
+- Document in API docs and examples
+- Add tests to verify pre-binding effectiveness
+
+**Relates-To**: T-016, ARCHITECTURE.md section on async signal safety
+**Supersedes**: None
+
+---
+
 ## Related Documents
 - **PRD.md**: Product requirements (WHAT to build)
 - **ARCHITECTURE.md**: Technical design (HOW it's built)

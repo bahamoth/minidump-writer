@@ -67,6 +67,7 @@ Before claiming any task, agents must identify themselves:
 | T-013 | Implement iOS CrashContext | DONE   | architect-forge | R-001, R-002 | **BLOCKER**: crash-context crate doesn't support iOS. Need custom implementation for iOS MinidumpWriter |
 | T-014 | Fix iOS implementation compilation errors | DONE   | architect-forge | T-010, D-2025-07-18-01 | Merged into T-009. Was: Fix import paths, API compatibility, and architecture issues preventing iOS simulator builds |
 | T-015 | Refactor iOS stream count to dynamic calculation | TODO   | - | #12 | Currently hardcoded as 4. Should follow macOS pattern using writers array for better maintainability |
+| T-016 | Implement function pre-binding for signal safety | TODO   | - | D-2025-07-28-01 | Pre-bind all lazy-bound functions before signal handler installation to avoid dyld deadlocks. Required for both macOS and iOS implementations per ARCHITECTURE.md guidelines |
 
 
 ### Task Assignment History
@@ -90,6 +91,7 @@ Before claiming any task, agents must identify themselves:
 2025-07-27: T-009: Assignee architect-strange → architect-forge (taking over to fix underlying test issues)
 2025-07-27: T-014: Status DOING → Dropped (merged into T-009)
 2025-07-28: T-015: Created task for iOS stream count refactoring based on PR review feedback
+2025-07-28: T-016: Created task for function pre-binding implementation (architect-vision)
 ```
 
 ## Templates
