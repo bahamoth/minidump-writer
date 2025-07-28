@@ -138,6 +138,22 @@ jobs:
             # Build and run tests
             cargo test --target x86_64-linux-android
 
+  test-ios-simulator:
+    name: Test iOS Simulator
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios-sim
+      - name: List available iOS runtimes
+        run: xcrun simctl list runtimes iOS
+      - name: Build tests
+        run: cargo test --target aarch64-apple-ios-sim --features test-ios-on-macos --no-run
+      - name: Run tests
+        run: cargo test --target aarch64-apple-ios-sim --features test-ios-on-macos
+
   deny-check:
     runs-on: ubuntu-22.04
     steps:
