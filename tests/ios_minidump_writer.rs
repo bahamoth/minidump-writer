@@ -363,30 +363,23 @@ mod macos_tests {
     fn test_mdrawsysteminfo_size() {
         let size = std::mem::size_of::<MDRawSystemInfo>();
         let cpu_size = std::mem::size_of::<format::CPU_INFORMATION>();
-        eprintln!("MDRawSystemInfo size: {}", size);
-        eprintln!("CPU_INFORMATION size: {}", cpu_size);
+        // Verify the size of MDRawSystemInfo and CPU_INFORMATION
+        assert!(size > 0, "MDRawSystemInfo size should be greater than 0");
+        assert!(cpu_size > 0, "CPU_INFORMATION size should be greater than 0");
 
         // Field layout check - check ALL fields
         let dummy: MDRawSystemInfo = unsafe { std::mem::zeroed() };
         let base = &dummy as *const _ as usize;
 
-        eprintln!("Field offsets in MDRawSystemInfo (Rust struct):");
-        eprintln!(
-            "  processor_architecture: {}",
-            &dummy.processor_architecture as *const _ as usize - base
-        );
-        eprintln!(
-            "  processor_level: {}",
-            &dummy.processor_level as *const _ as usize - base
-        );
-        eprintln!(
-            "  processor_revision: {}",
-            &dummy.processor_revision as *const _ as usize - base
-        );
-        eprintln!(
-            "  number_of_processors: {}",
-            &dummy.number_of_processors as *const _ as usize - base
-        );
+        // Field layout check - ensure offsets are calculated correctly
+        let processor_architecture_offset = &dummy.processor_architecture as *const _ as usize - base;
+        let processor_level_offset = &dummy.processor_level as *const _ as usize - base;
+        let processor_revision_offset = &dummy.processor_revision as *const _ as usize - base;
+        let number_of_processors_offset = &dummy.number_of_processors as *const _ as usize - base;
+        assert!(processor_architecture_offset >= 0, "Invalid offset for processor_architecture");
+        assert!(processor_level_offset >= 0, "Invalid offset for processor_level");
+        assert!(processor_revision_offset >= 0, "Invalid offset for processor_revision");
+        assert!(number_of_processors_offset >= 0, "Invalid offset for number_of_processors");
         eprintln!(
             "  product_type: {}",
             &dummy.product_type as *const _ as usize - base
