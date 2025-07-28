@@ -26,8 +26,22 @@ cat > "$BUNDLE_DIR/Info.plist" <<EOF
     <string>$BINARY_NAME</string>
     <key>CFBundleIdentifier</key>
     <string>$BUNDLE_ID</string>
+    <key>CFBundleName</key>
+    <string>MinidumpWriterTest</string>
+    <key>CFBundleDisplayName</key>
+    <string>MinidumpWriterTest</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>arm64</string>
+    </array>
 </dict>
 </plist>
 EOF
