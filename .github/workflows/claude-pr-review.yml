@@ -1,0 +1,95 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    # Skip if PR title contains [skip-claude]
+    # This prevents the "skip" status from appearing
+    branches:
+      - '**'
+
+jobs:
+  review:
+    name: Automated Code Review
+    # Skip if:
+    # - PR title has [skip-claude] 
+    # - PR is draft
+    # - PR author is bot
+    if: |
+      !contains(github.event.pull_request.title, '[skip-claude]') &&
+      !github.event.pull_request.draft &&
+      !contains(github.event.pull_request.user.type, 'Bot')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Review
+        uses: anthropics/claude-code-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          
+          # Use sticky comments to avoid spam
+          use_sticky_comment: true
+          
+          # Project context
+          custom_instructions: |
+            You are reviewing code for minidump-writer, a Rust library for generating minidump files.
+            
+            IMPORTANT: Start by understanding the project through CLAUDE.md - it's the main entry point.
+            
+            Documentation hierarchy:
+            - CLAUDE.md - Development workflow and standards
+            - CONVENTIONS.md - Coding standards (MUST follow)
+            - ARCHITECTURE.md - System design patterns
+            - DECISIONS.md - Technical choices and rationale
+            - PRD.md - iOS-specific requirements
+            
+            Key principles:
+            - Memory safety and reliability first
+            - Cross-platform support (Linux, Windows, macOS, iOS)
+            - Platform code in src/{linux,windows,mac,apple}
+            - All code must pass: cargo fmt, cargo clippy, cargo test
+          
+          # Review instructions
+          direct_prompt: |
+            Review this PR following the CLAUDE.md workflow.
+            
+            Mandatory checks:
+            1. ✅ CONVENTIONS.md compliance
+               - Rust idioms and style
+               - Error handling patterns
+               - Test requirements
+            
+            2. ✅ ARCHITECTURE.md alignment
+               - Platform abstraction patterns
+               - Module organization
+               - Design principles
+            
+            3. ✅ Pre-commit validation
+               - cargo fmt (formatting)
+               - cargo clippy (no warnings)
+               - cargo test (all passing)
+            
+            Review focus:
+            - Memory safety in unsafe blocks
+            - Platform-specific correctness
+            - Test coverage and quality
+            - Performance implications
+            - Security considerations
+            
+            Format your review with:
+            - 🟢 Good practices found
+            - 🟡 Suggestions for improvement
+            - 🔴 Issues that must be fixed
+            
+            Reference specific lines and documentation sections.
+            Be constructive and educational.
