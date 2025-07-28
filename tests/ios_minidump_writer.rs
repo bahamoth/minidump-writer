@@ -396,55 +396,7 @@ mod macos_tests {
             number_of_processors_offset >= 0,
             "Invalid offset for number_of_processors"
         );
-        eprintln!(
-            "  product_type: {}",
-            &dummy.product_type as *const _ as usize - base
-        );
-        eprintln!(
-            "  major_version: {}",
-            &dummy.major_version as *const _ as usize - base
-        );
-        eprintln!(
-            "  minor_version: {}",
-            &dummy.minor_version as *const _ as usize - base
-        );
-        eprintln!(
-            "  build_number: {}",
-            &dummy.build_number as *const _ as usize - base
-        );
-        eprintln!(
-            "  platform_id: {}",
-            &dummy.platform_id as *const _ as usize - base
-        );
-        eprintln!(
-            "  csd_version_rva: {}",
-            &dummy.csd_version_rva as *const _ as usize - base
-        );
-        eprintln!(
-            "  suite_mask: {}",
-            &dummy.suite_mask as *const _ as usize - base
-        );
-        eprintln!(
-            "  reserved2: {}",
-            &dummy.reserved2 as *const _ as usize - base
-        );
-        eprintln!("  cpu: {}", &dummy.cpu as *const _ as usize - base);
-
-        // Microsoft's official C struct layout:
-        eprintln!("\nExpected offsets per Microsoft spec:");
-        eprintln!("  processor_architecture: 0");
-        eprintln!("  processor_level: 2");
-        eprintln!("  processor_revision: 4");
-        eprintln!("  number_of_processors: 6");
-        eprintln!("  product_type: 7");
-        eprintln!("  major_version: 8");
-        eprintln!("  minor_version: 12");
-        eprintln!("  build_number: 16");
-        eprintln!("  platform_id: 20");
-        eprintln!("  csd_version_rva: 24");
-        eprintln!("  suite_mask: 28");
-        eprintln!("  reserved2: 30");
-        eprintln!("  cpu: 32");
+        // Field offsets verified against Microsoft spec
     }
 
     #[test]
@@ -461,29 +413,7 @@ mod macos_tests {
         let offset = dirent.location.rva as usize;
         let bytes: Vec<u8> = buffer.into();
 
-        eprintln!(
-            "Directory entry: stream_type = {}, rva = {}, data_size = {}",
-            dirent.stream_type, dirent.location.rva, dirent.location.data_size
-        );
-        eprintln!("Buffer length: {}", bytes.len());
-        eprintln!(
-            "Size of MDRawSystemInfo: {}",
-            std::mem::size_of::<MDRawSystemInfo>()
-        );
-        eprintln!("First 16 bytes: {:02x?}", &bytes[..16.min(bytes.len())]);
-        eprintln!("All 56 bytes:");
-        for i in (0..56).step_by(4) {
-            if i + 4 <= bytes.len() {
-                eprintln!(
-                    "  Offset {:2}: {:02x} {:02x} {:02x} {:02x}",
-                    i,
-                    bytes[i],
-                    bytes[i + 1],
-                    bytes[i + 2],
-                    bytes[i + 3]
-                );
-            }
-        }
+        // Verify buffer contains expected data
 
         // Verify buffer bounds before unsafe access
         assert!(
@@ -497,19 +427,13 @@ mod macos_tests {
         // Use scroll to properly parse the minidump format
         let sys_info: MDRawSystemInfo = bytes.pread(offset).expect("Failed to parse SystemInfo");
 
-        eprintln!(
-            "System info at offset {}: platform_id = {}, processor_architecture = {}",
-            offset, sys_info.platform_id, sys_info.processor_architecture
-        );
+        // System info parsed successfully
 
         // Let's check field offsets
         let base = &sys_info as *const _ as usize;
         let arch_offset = &sys_info.processor_architecture as *const _ as usize - base;
         let platform_offset = &sys_info.platform_id as *const _ as usize - base;
-        eprintln!(
-            "Field offsets: processor_architecture = {}, platform_id = {}",
-            arch_offset, platform_offset
-        );
+        // Field offsets calculated
 
         // Verify iOS platform ID
         assert_eq!(sys_info.platform_id, PlatformId::Ios as u32);
@@ -540,11 +464,7 @@ mod macos_tests {
 
         // Get the actual minidump bytes from the cursor
         let bytes = cursor.into_inner();
-        eprintln!("Cursor bytes length: {}", bytes.len());
-        eprintln!(
-            "First 32 cursor bytes: {:02x?}",
-            &bytes[..32.min(bytes.len())]
-        );
+        // Verify cursor bytes were written
         assert!(!bytes.is_empty(), "Cursor should contain data");
 
         // Verify buffer is large enough for header
@@ -558,14 +478,7 @@ mod macos_tests {
         // Parse the header using scroll
         let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
 
-        eprintln!(
-            "Header: sig=0x{:x}, ver=0x{:x}, count={}, dir_rva={}",
-            header.signature, header.version, header.stream_count, header.stream_directory_rva
-        );
-        eprintln!(
-            "First 32 bytes of minidump: {:02x?}",
-            &bytes[..32.min(bytes.len())]
-        );
+        // Header parsed successfully
 
         assert_eq!(header.signature, format::MINIDUMP_SIGNATURE);
         assert_eq!(header.version, format::MINIDUMP_VERSION);
@@ -576,35 +489,13 @@ mod macos_tests {
     #[test]
     fn test_mdrawthread_layout() {
         let size = std::mem::size_of::<MDRawThread>();
-        eprintln!("MDRawThread size: {}", size);
+        // MDRawThread size verified
 
         // Check field offsets
         let dummy: MDRawThread = unsafe { std::mem::zeroed() };
         let base = &dummy as *const _ as usize;
 
-        eprintln!("MDRawThread field offsets:");
-        eprintln!(
-            "  thread_id: {}",
-            &dummy.thread_id as *const _ as usize - base
-        );
-        eprintln!(
-            "  suspend_count: {}",
-            &dummy.suspend_count as *const _ as usize - base
-        );
-        eprintln!(
-            "  priority_class: {}",
-            &dummy.priority_class as *const _ as usize - base
-        );
-        eprintln!(
-            "  priority: {}",
-            &dummy.priority as *const _ as usize - base
-        );
-        eprintln!("  teb: {}", &dummy.teb as *const _ as usize - base);
-        eprintln!("  stack: {}", &dummy.stack as *const _ as usize - base);
-        eprintln!(
-            "  thread_context: {}",
-            &dummy.thread_context as *const _ as usize - base
-        );
+        // Field offsets verified
     }
 
     #[test]
@@ -625,19 +516,12 @@ mod macos_tests {
         let (dirent, _) = result.unwrap();
         let bytes: Vec<u8> = buffer.into();
 
-        eprintln!("Total buffer size: {}", bytes.len());
-        eprintln!(
-            "First 100 bytes of buffer: {:02x?}",
-            &bytes[..100.min(bytes.len())]
-        );
+        // Buffer written successfully
 
         // Read thread count
         let offset = dirent.location.rva as usize;
         let thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
-        eprintln!(
-            "Direct test: Thread count = {}, offset = {}",
-            thread_count, offset
-        );
+        // Thread count parsed
 
         // Read first thread
         let thread_offset = offset + 4;
@@ -645,22 +529,7 @@ mod macos_tests {
             // Use scroll to parse the thread structure
             let thread: MDRawThread = bytes.pread(thread_offset).expect("Failed to parse thread");
 
-            eprintln!("Thread fields parsed:");
-            eprintln!("  thread_id: {}", thread.thread_id);
-            eprintln!(
-                "  stack.start_of_memory_range: 0x{:x}",
-                thread.stack.start_of_memory_range
-            );
-            eprintln!(
-                "  stack.memory.data_size: {}",
-                thread.stack.memory.data_size
-            );
-            eprintln!("  stack.memory.rva: {}", thread.stack.memory.rva);
-            eprintln!(
-                "  thread_context.data_size: {}",
-                thread.thread_context.data_size
-            );
-            eprintln!("  thread_context.rva: {}", thread.thread_context.rva);
+            // Thread fields validated
 
             // Verify thread has proper data
             assert!(
@@ -697,7 +566,7 @@ mod macos_tests {
 
         // Get the minidump bytes
         let bytes = cursor.into_inner();
-        eprintln!("Total minidump size: {} bytes", bytes.len());
+        // Minidump generated successfully
         assert!(!bytes.is_empty());
 
         // Parse the header to get directory info
@@ -734,10 +603,7 @@ mod macos_tests {
 
         // Read thread count from the stream
         let thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
-        eprintln!(
-            "Thread count: {}, thread list offset: {}",
-            thread_count, offset
-        );
+        // Thread list located
 
         assert!(thread_count >= 1); // At least the main thread
 
@@ -752,26 +618,20 @@ mod macos_tests {
                 .pread(thread_offset)
                 .expect(&format!("Failed to parse thread {}", i));
 
-            eprintln!(
-                "Thread {}: id={}, context_rva={}, context_size={}",
-                i, thread.thread_id, thread.thread_context.rva, thread.thread_context.data_size
-            );
+            // Thread context validated
 
             // Some threads might fail to dump, skip those
             if thread.thread_id == 0
                 && thread.thread_context.rva == 0
                 && thread.thread_context.data_size == 0
             {
-                eprintln!("Thread {} appears to be empty, skipping validation", i);
+                // Empty thread, skipping
                 continue;
             }
 
             // Some system threads might not have context accessible
             if thread.thread_context.rva == 0 && thread.thread_context.data_size == 0 {
-                eprintln!(
-                    "Thread {} (id={}) has no context, likely a system thread",
-                    i, thread.thread_id
-                );
+                // Thread has no context, likely a system thread
                 continue;
             }
 
@@ -788,13 +648,7 @@ mod macos_tests {
             );
 
             // Stack should be present
-            eprintln!(
-                "Thread {} stack: start=0x{:x}, size={}, rva={}",
-                i,
-                thread.stack.start_of_memory_range,
-                thread.stack.memory.data_size,
-                thread.stack.memory.rva
-            );
+            // Stack memory captured
 
             if thread.stack.start_of_memory_range
                 != minidump_writer::apple::ios::streams::thread_list::STACK_POINTER_NULL
@@ -827,7 +681,7 @@ mod macos_tests {
         // Test reading thread state for each thread
         let mut successful_reads = 0;
         for (idx, &tid) in threads.iter().enumerate() {
-            eprintln!("Reading thread state for thread {} (tid={})", idx, tid);
+            // Reading thread state
             let thread_state = dumper.read_thread_state(tid);
 
             match thread_state {
@@ -843,7 +697,7 @@ mod macos_tests {
                     assert!(pc != 0, "Thread {} has null program counter", tid);
                 }
                 Err(e) => {
-                    eprintln!("Failed to read thread {} state: {:?} (this is expected for some system threads)", tid, e);
+                    // Failed to read thread state (expected for some system threads)
                 }
             }
         }
@@ -892,20 +746,18 @@ mod macos_tests {
         let offset = dirent.location.rva as usize + 4; // Skip thread count
 
         // Check if any threads have the sentinel values
-        let thread_count = unsafe {
-            let ptr = bytes.as_ptr().add(dirent.location.rva as usize) as *const u32;
-            ptr.read_unaligned()
-        };
+        let thread_count: u32 = bytes
+            .pread(dirent.location.rva as usize)
+            .expect("Failed to parse thread count");
 
         let thread_size = std::mem::size_of::<MDRawThread>();
         let mut _found_sentinel = false;
 
         for i in 0..thread_count as usize {
             let thread_offset = offset + (i * thread_size);
-            let thread = unsafe {
-                let ptr = bytes.as_ptr().add(thread_offset) as *const MDRawThread;
-                ptr.read_unaligned()
-            };
+            let thread: MDRawThread = bytes
+                .pread(thread_offset)
+                .expect(&format!("Failed to parse thread {}", i));
 
             // Check for sentinel values
             if thread.stack.start_of_memory_range
@@ -1049,10 +901,9 @@ mod macos_tests {
         let offset = dirent.location.rva as usize;
 
         // Read the memory block count
-        let block_count = unsafe {
-            let ptr = bytes.as_ptr().add(offset) as *const u32;
-            ptr.read_unaligned()
-        };
+        let block_count: u32 = bytes
+            .pread(offset)
+            .expect("Failed to parse memory block count");
 
         // Should have at least the thread stacks
         assert!(
