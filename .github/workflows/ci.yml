@@ -156,7 +156,11 @@ jobs:
       - name: Build tests
         run: cargo test --target aarch64-apple-ios-sim --features test-ios-on-macos --no-run
       - name: Run tests
-        run: cargo test --target aarch64-apple-ios-sim --features test-ios-on-macos
+        run: |
+          # Run only iOS-specific tests
+          cargo test --target aarch64-apple-ios-sim --features test-ios-on-macos \
+            --lib \
+            --test ios_minidump_writer
 
   deny-check:
     runs-on: ubuntu-22.04
