@@ -40,17 +40,45 @@ codesign -s - "$BUNDLE_DIR/$BINARY_NAME"
 DEVICE_NAME="minidump-test-iPhone"
 DEVICE_TYPE="iPhone 15"
 
-# Get available runtime (prefer latest iOS)
-RUNTIME=$(xcrun simctl list runtimes iOS | grep -Eo "iOS.*" | sort -V | tail -1 | xargs)
+# Get available runtime
+# First try to get the runtime ID directly
+RUNTIME=$(xcrun simctl list runtimes | grep -m1 -Eo "com.apple.CoreSimulator.SimRuntime.iOS-[0-9-]+" || echo "")
+
+# If that fails, try to find any iOS runtime
+if [ -z "$RUNTIME" ]; then
+    RUNTIME=$(xcrun simctl list runtimes | grep iOS | head -1 | awk -F' - ' '{print $3}' | xargs)
+fi
+
 if [ -z "$RUNTIME" ]; then
     echo "Error: No iOS runtime found" >&2
+    echo "Available runtimes:" >&2
+    xcrun simctl list runtimes >&2
     exit 1
 fi
+
+echo "Using runtime: $RUNTIME"
 
 # Create device if needed
 DEVICE_ID=$(xcrun simctl list devices | grep "$DEVICE_NAME" | grep -oE "[A-F0-9-]{36}" | head -1)
 if [ -z "$DEVICE_ID" ]; then
-    DEVICE_ID=$(xcrun simctl create "$DEVICE_NAME" "$DEVICE_TYPE" "$RUNTIME")
+    # Try to create device with the runtime
+    DEVICE_ID=$(xcrun simctl create "$DEVICE_NAME" "$DEVICE_TYPE" "$RUNTIME" 2>&1)
+    if [ $? -ne 0 ]; then
+        echo "Failed to create device with runtime: $RUNTIME" >&2
+        echo "Error: $DEVICE_ID" >&2
+        echo "Trying with first available iPhone device type..." >&2
+        
+        # Get first available iPhone device type
+        DEVICE_TYPE=$(xcrun simctl list devicetypes | grep iPhone | head -1 | awk -F' (' '{print $2}' | tr -d ')')
+        if [ -z "$DEVICE_TYPE" ]; then
+            DEVICE_TYPE="com.apple.CoreSimulator.SimDeviceType.iPhone-15"
+        fi
+        
+        DEVICE_ID=$(xcrun simctl create "$DEVICE_NAME" "$DEVICE_TYPE" "$RUNTIME" 2>/dev/null || echo "")
+    fi
+    
+    # Extract device ID from output
+    DEVICE_ID=$(echo "$DEVICE_ID" | grep -oE "[A-F0-9-]{36}" | head -1)
 fi
 
 # Boot device if needed
