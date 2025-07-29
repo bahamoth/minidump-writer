@@ -11,7 +11,7 @@ const DYLD_ALL_IMAGE_INFOS_VERSION: u32 = 1;
 
 /// Thread basic info structure for iOS
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct thread_basic_info {
     pub user_time: libc::time_value_t,
     pub system_time: libc::time_value_t,
