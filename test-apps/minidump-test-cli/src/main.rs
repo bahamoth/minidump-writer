@@ -81,8 +81,20 @@ fn handle_crash(crash_type: CrashType, output: Option<PathBuf>, debug: bool) {
         CrashType::Segfault => {
             eprintln!("Triggering segmentation fault...");
             unsafe {
-                let null_ptr: *mut i32 = std::ptr::null_mut();
-                *null_ptr = 42;
+                // Use inline assembly to directly cause segfault at specific address
+                #[cfg(target_arch = "aarch64")]
+                std::arch::asm!(
+                    "movz x0, #0xbeef",
+                    "movk x0, #0xdead, lsl #16",
+                    "str x1, [x0]",
+                    options(noreturn)
+                );
+                #[cfg(target_arch = "x86_64")]
+                std::arch::asm!(
+                    "mov rax, 0xdeadbeef",
+                    "mov [rax], rbx",
+                    options(noreturn)
+                );
             }
         }
         CrashType::Abort => {
@@ -274,8 +286,8 @@ fn setup_crash_handler(output: Option<PathBuf>, debug: bool) {
         eprintln!("Setting up crash handler, will write to: {}", output_path.display());
     }
     
-    // Signal handler function
-    extern "C" fn signal_handler(sig: libc::c_int) {
+    // Signal handler function with siginfo for fault address
+    extern "C" fn signal_handler(sig: libc::c_int, info: *mut libc::siginfo_t, _context: *mut libc::c_void) {
         // Note: This is a signal handler, so we must be very careful about what we do here
         // No heap allocations, no mutex locks (except our pre-existing ones), etc.
         
@@ -334,7 +346,12 @@ fn setup_crash_handler(output: Option<PathBuf>, debug: bool) {
                                     _ => 0,
                                 },
                                 code: sig as u64,
-                                subcode: None,
+                                subcode: if !info.is_null() && (sig == libc::SIGSEGV || sig == libc::SIGBUS) {
+                                    // For SIGSEGV/SIGBUS, si_addr contains the fault address
+                                    Some(unsafe { (*info).si_addr() as u64 })
+                                } else {
+                                    None
+                                },
                             }),
                             thread_state,
                         };
@@ -370,13 +387,23 @@ fn setup_crash_handler(output: Option<PathBuf>, debug: bool) {
         }
     }
     
-    // Install signal handlers
+    // Install signal handlers with sigaction to get siginfo
     unsafe {
-        libc::signal(libc::SIGSEGV, signal_handler as libc::sighandler_t);
-        libc::signal(libc::SIGABRT, signal_handler as libc::sighandler_t);
-        libc::signal(libc::SIGILL, signal_handler as libc::sighandler_t);
-        libc::signal(libc::SIGBUS, signal_handler as libc::sighandler_t);
-        libc::signal(libc::SIGFPE, signal_handler as libc::sighandler_t);
-        libc::signal(libc::SIGTRAP, signal_handler as libc::sighandler_t);
+        let signals = [
+            libc::SIGSEGV,  // Segmentation fault
+            libc::SIGABRT,  // Abort
+            libc::SIGILL,   // Illegal instruction
+            libc::SIGBUS,   // Bus error
+            libc::SIGFPE,   // Floating point exception
+            libc::SIGTRAP,  // Trap
+        ];
+        
+        let mut sa: libc::sigaction = std::mem::zeroed();
+        sa.sa_sigaction = signal_handler as usize;
+        sa.sa_flags = libc::SA_SIGINFO;
+        
+        for &sig in &signals {
+            libc::sigaction(sig, &sa, std::ptr::null_mut());
+        }
     }
 }
