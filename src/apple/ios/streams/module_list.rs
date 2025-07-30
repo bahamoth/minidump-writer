@@ -1,3 +1,15 @@
+// IMPORTANT: iOS Signal Safety Considerations
+// ============================================
+// iOS only supports self-process dumps, which means this code may run inside
+// signal handlers. The current implementation uses heap allocation (Vec/String)
+// which is NOT signal-safe. This is a known architectural issue that needs
+// to be addressed for production use in crash handlers.
+//
+// TODO: Implement signal-safe version using:
+// - Pre-allocated fixed-size buffers
+// - Direct write(2) system calls
+// - No heap allocations or error propagation with allocations
+
 use crate::{
     apple::{
         common::mach,
@@ -129,11 +141,12 @@ fn write_loaded_modules(
             rva: buf.position() as u32,
         };
 
-        // Write CV signature
+        // Write CV signature, UUID, and age
+        // SAFETY WARNING: This code uses heap allocation (Vec) and is NOT signal-safe.
+        // iOS requires self-process dumps which may run in signal handlers.
+        // TODO: This needs to be rewritten to use pre-allocated buffers for signal safety.
         buf.write_all(&CV_SIGNATURE.to_le_bytes());
-        // Write UUID
         buf.write_all(&details.uuid);
-        // Write age (always 0 for UUID-based records)
         buf.write_all(&0u32.to_le_bytes());
 
         module.cv_record = cv_location;
