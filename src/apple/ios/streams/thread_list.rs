@@ -60,9 +60,7 @@ pub fn write(
 
                 // Debug: Check if context was filled for crashing thread
                 if cpu.context_flags == 0 {
-                    eprintln!(
-                        "Warning: CPU context flags not set for crashing thread {tid}"
-                    );
+                    eprintln!("Warning: CPU context flags not set for crashing thread {tid}");
                     #[cfg(target_arch = "aarch64")]
                     {
                         let state = &context.thread_state;
