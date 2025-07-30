@@ -98,9 +98,10 @@ impl MinidumpWriter {
         let mut header_section = MemoryWriter::<MDRawHeader>::alloc(&mut buffer)
             .map_err(|e| WriterError::MemoryWriterError(e.to_string()))?;
 
-        let mut dir_section = DirSection::new(&mut buffer, num_writers, destination).map_err(|e| {
-            WriterError::DirectoryError(format!("Failed to create directory section: {e}"))
-        })?;
+        let mut dir_section =
+            DirSection::new(&mut buffer, num_writers, destination).map_err(|e| {
+                WriterError::DirectoryError(format!("Failed to create directory section: {e}"))
+            })?;
 
         let header = MDRawHeader {
             signature: MINIDUMP_SIGNATURE,
@@ -124,8 +125,8 @@ impl MinidumpWriter {
             .write_to_file(&mut buffer, None)
             .map_err(|e| WriterError::DirectoryError(format!("Failed to flush header: {e}")))?;
 
-        let dumper = TaskDumper::new(self.task)
-            .map_err(|e| WriterError::TaskDumperError(e.to_string()))?;
+        let dumper =
+            TaskDumper::new(self.task).map_err(|e| WriterError::TaskDumperError(e.to_string()))?;
 
         for mut writer in writers {
             let dirent = writer(self, &mut buffer, &dumper)?;
@@ -154,12 +155,13 @@ impl MinidumpWriter {
         buffer: &mut DumpBuf,
         dumper: &TaskDumper,
     ) -> Result<MDRawDirectory> {
-        let (dirent, context) = crate::apple::ios::streams::thread_list::write(self, buffer, dumper)
-            .map_err(WriterError::from)?;
-        
+        let (dirent, context) =
+            crate::apple::ios::streams::thread_list::write(self, buffer, dumper)
+                .map_err(WriterError::from)?;
+
         // Store the crashing thread context for exception stream
         self.crashing_thread_context = context;
-        
+
         Ok(dirent)
     }
 
