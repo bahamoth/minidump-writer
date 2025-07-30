@@ -482,7 +482,7 @@ mod macos_tests {
 
         assert_eq!(header.signature, format::MINIDUMP_SIGNATURE);
         assert_eq!(header.version, format::MINIDUMP_VERSION);
-        assert_eq!(header.stream_count, 4); // 4 streams: system info, exception, thread list, memory list
+        assert_eq!(header.stream_count, 5); // 5 streams: system info, thread list, exception, memory list, module list
         assert_eq!(header.stream_directory_rva, 0x20); // Directory should be at offset 32
     }
 
@@ -1112,5 +1112,130 @@ mod macos_tests {
         assert_eq!(md_exception.exception_flags, 13);
         assert_eq!(md_exception.exception_address, 0xdeadbeef);
         // Note: thread_id is not part of MDException struct itself
+    }
+
+    #[test]
+    fn test_module_list_stream() {
+        let mut writer = MinidumpWriter::new();
+        let mut cursor = Cursor::new(Vec::new());
+
+        // Dump full minidump to get module list
+        let result = writer.dump(&mut cursor);
+        assert!(result.is_ok());
+
+        // Get the minidump bytes
+        let bytes = cursor.into_inner();
+        assert!(!bytes.is_empty());
+
+        // Parse the header to get directory info
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+        assert_eq!(header.stream_count, 5); // Should have 5 streams now
+
+        // Find the module list stream in the directory
+        let mut module_list_offset = None;
+        let mut module_list_size = None;
+
+        for i in 0..header.stream_count {
+            let dir_entry_offset = header.stream_directory_rva as usize
+                + (i as usize * std::mem::size_of::<MDRawDirectory>());
+            let dir_entry: MDRawDirectory = bytes
+                .pread(dir_entry_offset)
+                .expect("Failed to parse directory entry");
+
+            if dir_entry.stream_type == MDStreamType::ModuleListStream as u32 {
+                module_list_size = Some(dir_entry.location.data_size);
+                module_list_offset = Some(dir_entry.location.rva);
+                break;
+            }
+        }
+
+        assert!(module_list_offset.is_some(), "Module list stream not found");
+        let offset = module_list_offset.unwrap() as usize;
+        let size = module_list_size.unwrap() as usize;
+
+        assert!(
+            offset + size <= bytes.len(),
+            "Module list stream exceeds buffer"
+        );
+
+        // Read module count from the stream
+        let module_count: u32 = bytes.pread(offset).expect("Failed to parse module count");
+        assert!(module_count > 0, "Should have at least one module");
+
+        // Verify first module structure
+        let modules_offset = offset + 4;
+        let first_module: MDRawModule = bytes
+            .pread(modules_offset)
+            .expect("Failed to parse first module");
+
+        // Verify module has valid base address and size
+        assert!(first_module.base_of_image > 0, "Module should have valid base address");
+        assert!(first_module.size_of_image > 0, "Module should have valid size");
+
+        // Verify module has a name
+        assert!(first_module.module_name_rva > 0, "Module should have a name");
+
+        // Verify module has CV record (UUID on iOS)
+        assert!(first_module.cv_record.rva > 0, "Module should have CV record");
+        assert_eq!(first_module.cv_record.data_size, 24, "CV record should be 24 bytes (signature + UUID + age)");
+    }
+
+    #[test]
+    fn test_thread_register_capture() {
+        let mut writer = MinidumpWriter::new();
+        let mut cursor = Cursor::new(Vec::new());
+
+        // Dump full minidump
+        let result = writer.dump(&mut cursor);
+        assert!(result.is_ok());
+
+        // Get the minidump bytes
+        let bytes = cursor.into_inner();
+
+        // Parse the header
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+
+        // Find the thread list stream
+        let mut thread_list_offset = None;
+        for i in 0..header.stream_count {
+            let dir_entry_offset = header.stream_directory_rva as usize
+                + (i as usize * std::mem::size_of::<MDRawDirectory>());
+            let dir_entry: MDRawDirectory = bytes
+                .pread(dir_entry_offset)
+                .expect("Failed to parse directory entry");
+
+            if dir_entry.stream_type == MDStreamType::ThreadListStream as u32 {
+                thread_list_offset = Some(dir_entry.location.rva as usize);
+                break;
+            }
+        }
+
+        assert!(thread_list_offset.is_some(), "Thread list stream not found");
+        let offset = thread_list_offset.unwrap();
+
+        // Read thread count
+        let thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
+        assert!(thread_count >= 1, "Should have at least one thread");
+
+        // Check first thread's registers
+        let thread_offset = offset + 4;
+        let first_thread: MDRawThread = bytes
+            .pread(thread_offset)
+            .expect("Failed to parse first thread");
+
+        // Verify thread has context
+        assert!(first_thread.thread_context.rva > 0, "Thread should have context");
+        assert!(first_thread.thread_context.data_size > 0, "Thread context should have size");
+
+        // Read the context to verify it has register values
+        let context_offset = first_thread.thread_context.rva as usize;
+        
+        // For ARM64, context_flags is the first u64
+        let context_flags: u64 = bytes.pread(context_offset).expect("Failed to parse context flags");
+        
+        // Verify context flags indicate full context (should have both integer and floating point)
+        assert!(context_flags != 0, "Context flags should not be zero");
+        assert_eq!(context_flags & 0x00000002, 0x00000002, "Should have integer registers");
+        assert_eq!(context_flags & 0x00000004, 0x00000004, "Should have floating point registers");
     }
 }
