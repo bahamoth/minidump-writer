@@ -9,6 +9,9 @@ use crate::{
 };
 
 // We use dyld functions here which are marked deprecated in libc, but mach2 doesn't provide them yet
+// TODO: Consider migrating to dyld_process_info_create when minimum iOS version is raised to 10.0+
+// The _dyld_* functions have been deprecated since macOS 10.5 but are still available and widely used
+// for compatibility with older iOS versions. The newer dyld_process_info_create API requires iOS 10.0+.
 #[allow(deprecated)]
 use libc::{_dyld_get_image_header, _dyld_get_image_name, _dyld_image_count};
 
