@@ -122,15 +122,40 @@ fn handle_crash(crash_type: CrashType, output: Option<PathBuf>, debug: bool) {
         CrashType::Bus => {
             eprintln!("Triggering bus error...");
             unsafe {
-                // Misaligned memory access on ARM
-                let ptr = 1 as *const u64;
-                let _val = *ptr;
+                // Force misaligned access on ARM64
+                #[cfg(target_arch = "aarch64")]
+                std::arch::asm!(
+                    "mov x0, #0x1001",  // Odd address for 8-byte access
+                    "ldr x1, [x0]",     // Load 8 bytes from misaligned address
+                    options(noreturn)
+                );
+                #[cfg(target_arch = "x86_64")]
+                {
+                    // x86 is more tolerant of misalignment, use mmap for bus error
+                    let ptr = 0x1001 as *const u64;
+                    let _val = std::ptr::read_volatile(ptr);
+                }
             }
         }
         CrashType::Fpe => {
             eprintln!("Triggering floating point exception...");
+            // Integer divide by zero to trigger SIGFPE
             unsafe {
-                libc::raise(libc::SIGFPE);
+                #[cfg(target_arch = "aarch64")]
+                std::arch::asm!(
+                    "mov x0, #1",
+                    "mov x1, #0",
+                    "udiv x2, x0, x1",  // Unsigned divide by zero
+                    options(noreturn)
+                );
+                #[cfg(target_arch = "x86_64")]
+                std::arch::asm!(
+                    "mov rax, 1",
+                    "xor rdx, rdx",
+                    "xor rcx, rcx",
+                    "div rcx",         // Divide by zero
+                    options(noreturn)
+                );
             }
         }
         CrashType::Trap => {
