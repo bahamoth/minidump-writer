@@ -611,7 +611,7 @@ mod macos_tests {
         );
 
         // Read thread count from the stream
-        let _thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
+        let thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
         // Thread list located
 
         assert!(thread_count >= 1); // At least the main thread
