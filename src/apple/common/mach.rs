@@ -255,13 +255,14 @@ impl Default for ThreadState {
     fn default() -> Self {
         Self {
             state: [0u32; THREAD_STATE_MAX],
-            state_size: (THREAD_STATE_MAX * std::mem::size_of::<u32>()) as u32,
+            state_size: THREAD_STATE_MAX as u32, // mach APIs expect count of u32s, not bytes
         }
     }
 }
 
 impl ThreadState {
     pub fn fill_cpu_context(&self, cpu: &mut RawContextCPU) {
+        eprintln!("ThreadState::fill_cpu_context called");
         cfg_if::cfg_if! {
             if #[cfg(target_arch = "x86_64")] {
                 let state = self.arch_state();
@@ -301,6 +302,7 @@ impl ThreadState {
                     ..Default::default()
                 };
             } else if #[cfg(target_arch = "aarch64")] {
+                eprintln!("  Filling ARM64 context");
                 let state = self.arch_state();
                 // Convert x array (29 elements) to iregs array (31 elements)
                 let mut iregs = [0u64; 31];
@@ -308,14 +310,20 @@ impl ThreadState {
                     iregs[i] = val;
                 }
 
+                let flags = ContextFlagsArm64Old::CONTEXT_ARM64_OLD_FULL.bits() as u64;
+                eprintln!("  Setting context_flags to {flags:#x}");
+
                 *cpu = CONTEXT_ARM64_OLD {
-                    context_flags: ContextFlagsArm64Old::CONTEXT_ARM64_OLD_FULL.bits() as u64,
+                    context_flags: flags,
                     cpsr: state.cpsr,
                     pc: state.pc,
                     sp: state.sp,
                     iregs,
                     ..Default::default()
                 };
+
+                eprintln!("  After fill: context_flags={:#x}, pc={:#x}, sp={:#x}",
+                          cpu.context_flags, cpu.pc, cpu.sp);
             }
         }
     }

@@ -2,12 +2,14 @@
 
 pub mod exception;
 pub mod memory_list;
+pub mod module_list;
 pub mod system_info;
 pub mod thread_list;
 
 // Re-export key functions for tests
 pub use exception::write as write_exception;
 pub use memory_list::write as write_memory_list;
+pub use module_list::write as write_module_list;
 pub use system_info::write_system_info;
 pub use thread_list::write as write_thread_list;
 
