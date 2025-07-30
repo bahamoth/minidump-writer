@@ -435,8 +435,8 @@ mod macos_tests {
 
         // Let's check field offsets
         let base = &sys_info as *const _ as usize;
-        let arch_offset = &sys_info.processor_architecture as *const _ as usize - base;
-        let platform_offset = &sys_info.platform_id as *const _ as usize - base;
+        let _arch_offset = &sys_info.processor_architecture as *const _ as usize - base;
+        let _platform_offset = &sys_info.platform_id as *const _ as usize - base;
         // Field offsets calculated
 
         // Verify iOS platform ID
@@ -492,12 +492,12 @@ mod macos_tests {
 
     #[test]
     fn test_mdrawthread_layout() {
-        let size = std::mem::size_of::<MDRawThread>();
+        let _size = std::mem::size_of::<MDRawThread>();
         // MDRawThread size verified
 
         // Check field offsets
         let dummy: MDRawThread = unsafe { std::mem::zeroed() };
-        let base = &dummy as *const _ as usize;
+        let _base = &dummy as *const _ as usize;
 
         // Field offsets verified
     }
@@ -1031,7 +1031,7 @@ mod macos_tests {
 
     #[test]
     fn test_thread_list_sentinel_values() {
-        use streams::thread_list::{STACK_POINTER_NULL, STACK_READ_FAILED};
+        use minidump_writer::apple::ios::streams::thread_list::{STACK_POINTER_NULL, STACK_READ_FAILED};
 
         // Verify sentinel values are distinct
         assert_ne!(STACK_POINTER_NULL, STACK_READ_FAILED);
