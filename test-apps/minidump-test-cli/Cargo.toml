@@ -1,0 +1,21 @@
+[package]
+name = "minidump-test-cli"
+version = "0.1.0"
+edition = "2021"
+authors = ["minidump-writer contributors"]
+description = "Test CLI for minidump-writer library"
+license = "MIT"
+
+[dependencies]
+minidump-writer = { path = "../../" }
+clap = { version = "4", features = ["derive"] }
+libc = "0.2"
+chrono = "0.4"
+
+# Platform-specific dependencies
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+mach2 = "0.4"
+
+# Platform-specific features
+[target.'cfg(target_os = "ios")'.dependencies]
+minidump-writer = { path = "../../", features = ["test-ios-on-macos"] }
