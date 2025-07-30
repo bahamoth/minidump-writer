@@ -84,7 +84,10 @@ pub fn write(
                 }
                 Err(e) => {
                     // Failed to read thread state - leave thread context as default (empty)
-                    eprintln!("iOS: Failed to read thread state for thread {}: {:?}", tid, e);
+                    eprintln!(
+                        "iOS: Failed to read thread state for thread {}: {:?}",
+                        tid, e
+                    );
                 }
             }
         }

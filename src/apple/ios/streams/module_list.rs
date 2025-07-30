@@ -28,7 +28,12 @@ use crate::{
 use libc::{_dyld_get_image_header, _dyld_get_image_name, _dyld_image_count};
 
 struct ImageLoadInfo {
+    /// The preferred load address of the TEXT segment
+    vm_addr: u64,
+    /// The size of the TEXT segment
     vm_size: u64,
+    /// The difference between the image's preferred and actual load address
+    slide: isize,
 }
 
 struct ImageDetails {
@@ -85,7 +90,7 @@ fn write_loaded_modules(
         };
 
         let mut module = MDRawModule {
-            base_of_image: image.load_address,
+            base_of_image: (details.load_info.vm_addr as isize + details.load_info.slide) as u64,
             size_of_image: details.load_info.vm_size as u32,
             checksum: 0,
             time_date_stamp: 0,
@@ -172,8 +177,12 @@ fn read_image_details(
         match lc {
             mach::LoadCommand::Segment(seg) if load_info.is_none() => {
                 if &seg.segment_name[..7] == b"__TEXT\0" {
+                    let slide = image.load_address as isize - seg.vm_addr as isize;
+
                     load_info = Some(ImageLoadInfo {
+                        vm_addr: seg.vm_addr,
                         vm_size: seg.vm_size,
+                        slide,
                     });
                 }
             }
