@@ -384,20 +384,25 @@ mod macos_tests {
         let processor_level_offset = &dummy.processor_level as *const _ as usize - base;
         let processor_revision_offset = &dummy.processor_revision as *const _ as usize - base;
         let number_of_processors_offset = &dummy.number_of_processors as *const _ as usize - base;
+        // Offset is always >= 0 for usize subtraction
         assert!(
-            processor_architecture_offset >= 0,
+            processor_architecture_offset
+                < std::mem::size_of::<minidump_common::format::MINIDUMP_SYSTEM_INFO>(),
             "Invalid offset for processor_architecture"
         );
         assert!(
-            processor_level_offset >= 0,
+            processor_level_offset
+                < std::mem::size_of::<minidump_common::format::MINIDUMP_SYSTEM_INFO>(),
             "Invalid offset for processor_level"
         );
         assert!(
-            processor_revision_offset >= 0,
+            processor_revision_offset
+                < std::mem::size_of::<minidump_common::format::MINIDUMP_SYSTEM_INFO>(),
             "Invalid offset for processor_revision"
         );
         assert!(
-            number_of_processors_offset >= 0,
+            number_of_processors_offset
+                < std::mem::size_of::<minidump_common::format::MINIDUMP_SYSTEM_INFO>(),
             "Invalid offset for number_of_processors"
         );
         // Field offsets verified against Microsoft spec
@@ -486,7 +491,7 @@ mod macos_tests {
 
         assert_eq!(header.signature, format::MINIDUMP_SIGNATURE);
         assert_eq!(header.version, format::MINIDUMP_VERSION);
-        assert_eq!(header.stream_count, 5); // 5 streams: system info, thread list, exception, memory list, module list
+        assert_eq!(header.stream_count, 4); // 4 streams: system info, thread list, memory list, module list (no exception)
         assert_eq!(header.stream_directory_rva, 0x20); // Directory should be at offset 32
     }
 
@@ -524,7 +529,7 @@ mod macos_tests {
 
         // Read thread count
         let offset = dirent.location.rva as usize;
-        let thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
+        let _thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
         // Thread count parsed
 
         // Read first thread
@@ -606,7 +611,7 @@ mod macos_tests {
         );
 
         // Read thread count from the stream
-        let thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
+        let _thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
         // Thread list located
 
         assert!(thread_count >= 1); // At least the main thread
@@ -684,7 +689,7 @@ mod macos_tests {
 
         // Test reading thread state for each thread
         let mut successful_reads = 0;
-        for (idx, &tid) in threads.iter().enumerate() {
+        for (_idx, &tid) in threads.iter().enumerate() {
             // Reading thread state
             let thread_state = dumper.read_thread_state(tid);
 
@@ -700,7 +705,7 @@ mod macos_tests {
                     let pc = state.pc();
                     assert!(pc != 0, "Thread {} has null program counter", tid);
                 }
-                Err(e) => {
+                Err(_e) => {
                     // Failed to read thread state (expected for some system threads)
                 }
             }
@@ -816,14 +821,13 @@ mod macos_tests {
     }
 
     #[test]
-    #[ignore = "Can't set crash context on MinidumpWriter from external tests"]
     fn test_crashed_thread_with_context() {
         let mut writer = MinidumpWriter::new();
         let task = unsafe { mach2::traps::mach_task_self() };
         let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
 
         // Create a mock crash context
-        let _crash_context = IosCrashContext {
+        let crash_context = IosCrashContext {
             task,
             thread: current_thread,
             handler_thread: current_thread,
@@ -835,8 +839,8 @@ mod macos_tests {
             thread_state: minidump_writer::apple::common::mach::ThreadState::default(),
         };
 
-        // Note: We can't set crash context directly on MinidumpWriter from tests
-        // This would normally be set by the exception handler
+        // Set the crash context on the writer
+        writer.set_crash_context(crash_context);
 
         let dumper = TaskDumper::new(task).unwrap();
         let mut buffer = DumpBuf::with_capacity(0);
@@ -918,7 +922,6 @@ mod macos_tests {
     }
 
     #[test]
-    #[ignore = "Can't set crash context on MinidumpWriter from external tests"]
     fn test_memory_list_with_exception() {
         let mut writer = MinidumpWriter::new();
         let task = unsafe { mach2::traps::mach_task_self() };
@@ -929,7 +932,7 @@ mod macos_tests {
         let thread_state = dumper.read_thread_state(current_thread).unwrap();
 
         // Create crash context with exception
-        let _crash_context = IosCrashContext {
+        let crash_context = IosCrashContext {
             task,
             thread: current_thread,
             handler_thread: current_thread,
@@ -941,8 +944,8 @@ mod macos_tests {
             thread_state,
         };
 
-        // Note: We can't set crash context directly on MinidumpWriter from tests
-        // This would normally be set by the exception handler
+        // Set the crash context on the writer
+        writer.set_crash_context(crash_context);
 
         let mut buffer = DumpBuf::with_capacity(0);
 
@@ -1135,7 +1138,7 @@ mod macos_tests {
 
         // Parse the header to get directory info
         let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
-        assert_eq!(header.stream_count, 5); // Should have 5 streams now
+        assert_eq!(header.stream_count, 4); // Should have 4 streams (no exception stream)
 
         // Find the module list stream in the directory
         let mut module_list_offset = None;
