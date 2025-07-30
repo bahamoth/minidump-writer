@@ -57,6 +57,27 @@ pub fn write(
                 // This is the crashing thread, use the context from the exception
                 let mut cpu = RawContextCPU::default();
                 context.fill_cpu_context(&mut cpu);
+
+                // Debug: Check if context was filled for crashing thread
+                if cpu.context_flags == 0 {
+                    eprintln!(
+                        "Warning: CPU context flags not set for crashing thread {tid}"
+                    );
+                    #[cfg(target_arch = "aarch64")]
+                    {
+                        let state = &context.thread_state;
+                        eprintln!(
+                            "  CrashContext ThreadState size: {}",
+                            std::mem::size_of_val(state)
+                        );
+                        let arch_state = state.arch_state();
+                        eprintln!(
+                            "  ARM64 crash state: pc={:#x}, sp={:#x}, cpsr={:#x}",
+                            arch_state.pc, arch_state.sp, arch_state.cpsr
+                        );
+                    }
+                }
+
                 let cpu_section = MemoryWriter::alloc_with_val(buffer, cpu)
                     .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
                 thread.thread_context = cpu_section.location();
@@ -68,16 +89,40 @@ pub fn write(
             }
         } else {
             // For other threads, get the state from the dumper
-            if let Ok(thread_state) = dumper.read_thread_state(tid) {
-                let mut cpu = RawContextCPU::default();
-                thread_state.fill_cpu_context(&mut cpu);
-                let cpu_section = MemoryWriter::alloc_with_val(buffer, cpu)
-                    .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
-                thread.thread_context = cpu_section.location();
+            match dumper.read_thread_state(tid) {
+                Ok(thread_state) => {
+                    let mut cpu = RawContextCPU::default();
+                    thread_state.fill_cpu_context(&mut cpu);
 
-                // Get stack pointer and write stack memory
-                let sp = thread_state.sp();
-                write_stack_from_start_address(sp, &mut thread, buffer, dumper, config)?;
+                    // Debug: Check if context was filled
+                    if cpu.context_flags == 0 {
+                        eprintln!("Warning: CPU context flags not set for thread {tid}");
+                        eprintln!(
+                            "  ThreadState size: {}",
+                            std::mem::size_of_val(&thread_state)
+                        );
+                        #[cfg(target_arch = "aarch64")]
+                        {
+                            let state = thread_state.arch_state();
+                            eprintln!(
+                                "  ARM64 state: pc={:#x}, sp={:#x}, cpsr={:#x}",
+                                state.pc, state.sp, state.cpsr
+                            );
+                        }
+                    }
+
+                    let cpu_section = MemoryWriter::alloc_with_val(buffer, cpu)
+                        .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
+                    thread.thread_context = cpu_section.location();
+
+                    // Get stack pointer and write stack memory
+                    let sp = thread_state.sp();
+                    write_stack_from_start_address(sp, &mut thread, buffer, dumper, config)?;
+                }
+                Err(e) => {
+                    eprintln!("Failed to read thread state for thread {tid}: {e:?}");
+                    // Leave thread context as default (empty)
+                }
             }
         }
 

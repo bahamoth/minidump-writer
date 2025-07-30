@@ -72,19 +72,23 @@ impl MinidumpWriter {
         let dumper =
             TaskDumper::new(self.task).map_err(|e| WriterError::TaskDumperError(e.to_string()))?;
 
+        // Count of streams
+        const STREAM_COUNT: u32 = 5; // system info, thread list, exception, memory list, module list
+
         // Reserve space for header
         let mut header_section = MemoryWriter::<MDRawHeader>::alloc(&mut buffer)
             .map_err(|e| WriterError::MemoryWriterError(e.to_string()))?;
 
-        let mut dir_section = DirSection::new(&mut buffer, 4, destination).map_err(|e| {
-            WriterError::DirectoryError(format!("Failed to create directory section: {e}"))
-        })?;
+        let mut dir_section =
+            DirSection::new(&mut buffer, STREAM_COUNT, destination).map_err(|e| {
+                WriterError::DirectoryError(format!("Failed to create directory section: {e}"))
+            })?;
 
         // Write header first
         let header = MDRawHeader {
             signature: MINIDUMP_SIGNATURE,
             version: MINIDUMP_VERSION,
-            stream_count: 4, // system info, exception, thread list, memory list
+            stream_count: STREAM_COUNT,
             stream_directory_rva: dir_section.position(),
             checksum: 0, // TODO: Calculate checksum
             time_date_stamp: std::time::SystemTime::now()
@@ -126,14 +130,14 @@ impl MinidumpWriter {
             })?;
 
         // Write exception stream
-        let dirent = crate::apple::ios::streams::exception::write(
+        let exception_dirent = crate::apple::ios::streams::exception::write(
             self,
             &mut buffer,
             crashing_thread_context,
         )
         .map_err(WriterError::from)?;
         dir_section
-            .write_to_file(&mut buffer, Some(dirent))
+            .write_to_file(&mut buffer, Some(exception_dirent))
             .map_err(|e| {
                 WriterError::DirectoryError(format!("Failed to write directory entry: {e}"))
             })?;
@@ -144,6 +148,16 @@ impl MinidumpWriter {
                 .map_err(WriterError::from)?;
         dir_section
             .write_to_file(&mut buffer, Some(memory_list_dirent))
+            .map_err(|e| {
+                WriterError::DirectoryError(format!("Failed to write directory entry: {e}"))
+            })?;
+
+        // Write module list stream
+        let module_list_dirent =
+            crate::apple::ios::streams::module_list::write(self, &mut buffer, &dumper)
+                .map_err(WriterError::from)?;
+        dir_section
+            .write_to_file(&mut buffer, Some(module_list_dirent))
             .map_err(|e| {
                 WriterError::DirectoryError(format!("Failed to write directory entry: {e}"))
             })?;
