@@ -37,7 +37,7 @@ cfg_if::cfg_if! {
         pub use apple::ios::*;
 
         // Allow access to iOS module for testing on macOS
-        #[cfg(all(target_os = "macos", feature = "test-ios-on-macos"))]
+        #[cfg(all(any(target_os = "macos", target_os = "ios"), feature = "test-ios-on-macos"))]
         pub use apple::ios as ios_test;
     }
 }

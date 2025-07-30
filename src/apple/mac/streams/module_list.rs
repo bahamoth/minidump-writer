@@ -339,6 +339,14 @@ impl MinidumpWriter {
     }
 }
 
+// dyld API bindings for macOS
+#[allow(non_snake_case)]
+extern "C" {
+    fn _dyld_image_count() -> u32;
+    fn _dyld_get_image_name(image_index: u32) -> *const libc::c_char;
+    fn _dyld_get_image_header(image_index: u32) -> *const libc::c_void;
+}
+
 #[cfg(test)]
 // The libc functions used here are all marked as deprecated, saying you
 // should use the mach2 crate, however, the mach2 crate does not expose
@@ -439,12 +447,4 @@ mod test {
         assert_eq!("/usr/lib/dyld", dyld.file_path.as_deref().unwrap());
         assert!(dyld.load_info.vm_size > 0);
     }
-}
-
-// dyld API bindings for macOS
-#[allow(non_snake_case)]
-extern "C" {
-    fn _dyld_image_count() -> u32;
-    fn _dyld_get_image_name(image_index: u32) -> *const libc::c_char;
-    fn _dyld_get_image_header(image_index: u32) -> *const libc::c_void;
 }

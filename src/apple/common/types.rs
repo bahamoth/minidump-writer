@@ -24,6 +24,8 @@ pub enum TaskDumpError {
     },
     #[error("iOS security restriction: {0}")]
     SecurityRestriction(String),
+    #[error("thread state error: {0}")]
+    ThreadStateError(String),
 }
 
 /// `dyld_all_image_infos` from <usr/include/mach-o/dyld_images.h>

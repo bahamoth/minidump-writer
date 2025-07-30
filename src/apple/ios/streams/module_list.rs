@@ -1,3 +1,15 @@
+// IMPORTANT: iOS Signal Safety Considerations
+// ============================================
+// iOS only supports self-process dumps, which means this code may run inside
+// signal handlers. The current implementation uses heap allocation (Vec/String)
+// which is NOT signal-safe. This is a known architectural issue that needs
+// to be addressed for production use in crash handlers.
+//
+// TODO: Implement signal-safe version using:
+// - Pre-allocated fixed-size buffers
+// - Direct write(2) system calls
+// - No heap allocations or error propagation with allocations
+
 use crate::{
     apple::{
         common::mach,
@@ -9,11 +21,19 @@ use crate::{
 };
 
 // We use dyld functions here which are marked deprecated in libc, but mach2 doesn't provide them yet
+// TODO: Consider migrating to dyld_process_info_create when minimum iOS version is raised to 10.0+
+// The _dyld_* functions have been deprecated since macOS 10.5 but are still available and widely used
+// for compatibility with older iOS versions. The newer dyld_process_info_create API requires iOS 10.0+.
 #[allow(deprecated)]
 use libc::{_dyld_get_image_header, _dyld_get_image_name, _dyld_image_count};
 
 struct ImageLoadInfo {
+    /// The preferred load address of the TEXT segment
+    vm_addr: u64,
+    /// The size of the TEXT segment
     vm_size: u64,
+    /// The difference between the image's preferred and actual load address
+    slide: isize,
 }
 
 struct ImageDetails {
@@ -70,7 +90,7 @@ fn write_loaded_modules(
         };
 
         let mut module = MDRawModule {
-            base_of_image: image.load_address,
+            base_of_image: (details.load_info.vm_addr as isize + details.load_info.slide) as u64,
             size_of_image: details.load_info.vm_size as u32,
             checksum: 0,
             time_date_stamp: 0,
@@ -126,11 +146,12 @@ fn write_loaded_modules(
             rva: buf.position() as u32,
         };
 
-        // Write CV signature
+        // Write CV signature, UUID, and age
+        // SAFETY WARNING: This code uses heap allocation (Vec) and is NOT signal-safe.
+        // iOS requires self-process dumps which may run in signal handlers.
+        // TODO: This needs to be rewritten to use pre-allocated buffers for signal safety.
         buf.write_all(&CV_SIGNATURE.to_le_bytes());
-        // Write UUID
         buf.write_all(&details.uuid);
-        // Write age (always 0 for UUID-based records)
         buf.write_all(&0u32.to_le_bytes());
 
         module.cv_record = cv_location;
@@ -156,8 +177,12 @@ fn read_image_details(
         match lc {
             mach::LoadCommand::Segment(seg) if load_info.is_none() => {
                 if &seg.segment_name[..7] == b"__TEXT\0" {
+                    let slide = image.load_address as isize - seg.vm_addr as isize;
+
                     load_info = Some(ImageLoadInfo {
+                        vm_addr: seg.vm_addr,
                         vm_size: seg.vm_size,
+                        slide,
                     });
                 }
             }
