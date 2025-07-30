@@ -137,7 +137,7 @@ fn dump_external_process() {
             assert!(mi.processor_current_mhz > 0);
         }
     } else {
-        panic!("unexpected misc info type {:?}", misc_info);
+        panic!("unexpected misc info type {misc_info:?}");
     }
 }
 

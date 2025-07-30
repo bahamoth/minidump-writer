@@ -88,30 +88,12 @@ impl TaskDumper {
     pub fn read_thread_state(&self, tid: u32) -> Result<mach::ThreadState, TaskDumpError> {
         self.check_current_process()?;
         let mut thread_state = mach::ThreadState::default();
-
-        // For ARM64, we need to set the correct size
-        #[cfg(target_arch = "aarch64")]
-        {
-            // ARM64_THREAD_STATE64 size in u32 words
-            thread_state.state_size =
-                (std::mem::size_of::<mach::ArchThreadState>() / std::mem::size_of::<u32>()) as u32;
-        }
-
-        let result = mach_call!(mach::thread_get_state(
+        mach_call!(mach::thread_get_state(
             tid,
             mach::THREAD_STATE_FLAVOR as i32,
             thread_state.state.as_mut_ptr(),
             &mut thread_state.state_size
-        ));
-
-        result?;
-
-        // Check if we got any data
-        #[cfg(target_arch = "aarch64")]
-        {
-            let _state = thread_state.arch_state();
-        }
-
+        ))?;
         Ok(thread_state)
     }
 
