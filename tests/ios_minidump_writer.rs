@@ -332,7 +332,11 @@ mod test {
     }
 }
 
-#[cfg(all(test, target_os = "macos", feature = "test-ios-on-macos"))]
+#[cfg(all(
+    test,
+    any(target_os = "macos", target_os = "ios"),
+    feature = "test-ios-on-macos"
+))]
 mod macos_tests {
     use minidump_common::format::PlatformId;
     use minidump_writer::dir_section::DumpBuf;
