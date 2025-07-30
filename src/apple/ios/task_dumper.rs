@@ -114,7 +114,7 @@ impl TaskDumper {
         ));
 
         eprintln!("  state_size after: {} (words)", thread_state.state_size);
-        eprintln!("  result: {:?}", result);
+        eprintln!("  result: {result:?}");
 
         result?;
 
