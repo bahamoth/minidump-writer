@@ -1169,15 +1169,30 @@ mod macos_tests {
             .expect("Failed to parse first module");
 
         // Verify module has valid base address and size
-        assert!(first_module.base_of_image > 0, "Module should have valid base address");
-        assert!(first_module.size_of_image > 0, "Module should have valid size");
+        assert!(
+            first_module.base_of_image > 0,
+            "Module should have valid base address"
+        );
+        assert!(
+            first_module.size_of_image > 0,
+            "Module should have valid size"
+        );
 
         // Verify module has a name
-        assert!(first_module.module_name_rva > 0, "Module should have a name");
+        assert!(
+            first_module.module_name_rva > 0,
+            "Module should have a name"
+        );
 
         // Verify module has CV record (UUID on iOS)
-        assert!(first_module.cv_record.rva > 0, "Module should have CV record");
-        assert_eq!(first_module.cv_record.data_size, 24, "CV record should be 24 bytes (signature + UUID + age)");
+        assert!(
+            first_module.cv_record.rva > 0,
+            "Module should have CV record"
+        );
+        assert_eq!(
+            first_module.cv_record.data_size, 24,
+            "CV record should be 24 bytes (signature + UUID + age)"
+        );
     }
 
     #[test]
@@ -1224,18 +1239,34 @@ mod macos_tests {
             .expect("Failed to parse first thread");
 
         // Verify thread has context
-        assert!(first_thread.thread_context.rva > 0, "Thread should have context");
-        assert!(first_thread.thread_context.data_size > 0, "Thread context should have size");
+        assert!(
+            first_thread.thread_context.rva > 0,
+            "Thread should have context"
+        );
+        assert!(
+            first_thread.thread_context.data_size > 0,
+            "Thread context should have size"
+        );
 
         // Read the context to verify it has register values
         let context_offset = first_thread.thread_context.rva as usize;
-        
+
         // For ARM64, context_flags is the first u64
-        let context_flags: u64 = bytes.pread(context_offset).expect("Failed to parse context flags");
-        
+        let context_flags: u64 = bytes
+            .pread(context_offset)
+            .expect("Failed to parse context flags");
+
         // Verify context flags indicate full context (should have both integer and floating point)
         assert!(context_flags != 0, "Context flags should not be zero");
-        assert_eq!(context_flags & 0x00000002, 0x00000002, "Should have integer registers");
-        assert_eq!(context_flags & 0x00000004, 0x00000004, "Should have floating point registers");
+        assert_eq!(
+            context_flags & 0x00000002,
+            0x00000002,
+            "Should have integer registers"
+        );
+        assert_eq!(
+            context_flags & 0x00000004,
+            0x00000004,
+            "Should have floating point registers"
+        );
     }
 }
