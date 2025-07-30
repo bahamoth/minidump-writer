@@ -1031,7 +1031,9 @@ mod macos_tests {
 
     #[test]
     fn test_thread_list_sentinel_values() {
-        use minidump_writer::apple::ios::streams::thread_list::{STACK_POINTER_NULL, STACK_READ_FAILED};
+        use minidump_writer::apple::ios::streams::thread_list::{
+            STACK_POINTER_NULL, STACK_READ_FAILED,
+        };
 
         // Verify sentinel values are distinct
         assert_ne!(STACK_POINTER_NULL, STACK_READ_FAILED);
