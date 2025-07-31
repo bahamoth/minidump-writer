@@ -204,6 +204,9 @@ Platform implementations rely primarily on system APIs to reduce external depend
 | `linux/` | Platform Module | Rust | Linux/Android implementation | `libc`, `goblin`, `memmap2` |
 | `windows/` | Platform Module | Rust | Windows implementation | `windows-sys`, `dbghelp.dll` |
 | `mac/` | Platform Module | Rust | macOS implementation | `mach2`, system frameworks |
+| `ios/` | Platform Module | Rust | iOS implementation | `mach2`, `libc`, `crash-context` |
+| `apple/common/` | Shared Module | Rust | Shared Apple platform code | `mach2`, `libc` |
+| `apple/common/streams/` | Shared Module | Rust | Common stream implementations | `minidump-common` |
 | `mem_writer` | Core Module | Rust | Memory buffer management | None (core only) |
 | `dir_section` | Core Module | Rust | Directory section handling | `minidump-common` |
 | `bin/minidump-writer` | Binary | Rust | CLI tool | Main library |
@@ -348,11 +351,13 @@ pub trait SectionWriter {
 - **Universal Binaries**: Support multiple architectures
 - **System Integrity Protection**: Work within SIP constraints
 
-### iOS (Planned)
-- **Self-Process Only**: No external process access
-- **Signal Safety**: Pre-allocated buffers for crash handling
+### iOS
+- **Self-Process Only**: No external process access due to security restrictions
+- **Signal Safety**: All operations must be async-signal-safe
+- **Pre-allocated Buffers**: No dynamic allocations during crash handling
 - **Sandbox Restrictions**: Limited file system access
-- **Memory Constraints**: Minimize allocations during crash
+- **Memory Constraints**: Static-sized data structures only
+- **Shared Code**: Leverages `apple/common/streams/` for breakpad_info and misc_info
 
 ## Related Documentation
 
