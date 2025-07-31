@@ -82,8 +82,8 @@ pub trait TaskDumperHelper {
 /// amount of time spent in user and system (kernel) time for the lifetime of
 /// the task. On macOS, we also attempt to retrieve CPU frequency statistics.
 pub fn write_misc_info<T: TaskDumperHelper>(
-    buffer: &mut DumpBuf,
     dumper: &T,
+    buffer: &mut DumpBuf,
 ) -> Result<MDRawDirectory, MemoryWriterError> {
     let mut info_section = MemoryWriter::<MDRawMiscInfo>::alloc(buffer)?;
     let dirent = MDRawDirectory {
