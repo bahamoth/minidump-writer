@@ -194,30 +194,6 @@ impl MinidumpWriter {
         crate::apple::ios::streams::exception::write(self, buffer, self.crashing_thread_context)
             .map_err(WriterError::from)
     }
-
-    fn write_misc_info(
-        &mut self,
-        buffer: &mut DumpBuf,
-        dumper: &TaskDumper,
-    ) -> Result<MDRawDirectory> {
-        self.write_misc_info(buffer, dumper)
-    }
-
-    fn write_breakpad_info(
-        &mut self,
-        buffer: &mut DumpBuf,
-        dumper: &TaskDumper,
-    ) -> Result<MDRawDirectory> {
-        self.write_breakpad_info(buffer, dumper)
-    }
-
-    fn write_thread_names(
-        &mut self,
-        buffer: &mut DumpBuf,
-        dumper: &TaskDumper,
-    ) -> Result<MDRawDirectory> {
-        self.write_thread_names(buffer, dumper)
-    }
 }
 
 impl Default for MinidumpWriter {

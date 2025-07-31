@@ -29,11 +29,7 @@ impl MinidumpWriter {
                 // be useful to ignore/deprioritize when processing the minidump
                 dump_thread_id: self.handler_thread.unwrap_or(0),
                 // The actual thread where the exception was thrown
-                requesting_thread_id: self
-                    .crash_context
-                    .as_ref()
-                    .and_then(|cc| cc.thread)
-                    .unwrap_or(0),
+                requesting_thread_id: self.crash_context.as_ref().map(|cc| cc.thread).unwrap_or(0),
             },
         )
         .map_err(|e| super::super::WriterError::MemoryWriterError(e.to_string()))?;

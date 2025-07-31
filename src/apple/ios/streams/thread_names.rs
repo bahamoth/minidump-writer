@@ -1,11 +1,8 @@
 use crate::{
-    apple::{
-        common::mach,
-        ios::{minidump_writer::MinidumpWriter, task_dumper::TaskDumper},
-    },
+    apple::ios::{minidump_writer::MinidumpWriter, task_dumper::TaskDumper},
     dir_section::DumpBuf,
     mem_writer::*,
-    minidump_format::{MDRawDirectory, MDRawThreadName, MDStreamType},
+    minidump_format::{MDLocationDescriptor, MDRawDirectory, MDRawThreadName, MDStreamType},
 };
 
 impl MinidumpWriter {
