@@ -1333,15 +1333,22 @@ mod macos_tests {
             .get_stream()
             .expect("ThreadNamesStream should be present");
 
+        // Get thread list to verify thread names
+        let thread_list: MinidumpThreadList =
+            md.get_stream().expect("ThreadList should be present");
+
         // Should have at least one thread
         assert!(
-            !thread_names.names.is_empty(),
-            "Should have at least one thread name"
+            !thread_list.threads.is_empty(),
+            "Should have at least one thread"
         );
 
-        // All threads should have valid IDs
-        for (thread_id, _name) in &thread_names.names {
-            assert!(*thread_id > 0, "Thread should have valid ID");
+        // All threads should have entries in thread names (even if empty)
+        for thread in &thread_list.threads {
+            let thread_id = thread.raw.thread_id;
+            // get_name returns Option<Cow<str>>, None means no name entry
+            let _name = thread_names.get_name(thread_id);
+            assert!(thread_id > 0, "Thread should have valid ID");
             // On iOS, thread names are currently empty
         }
     }
@@ -1751,10 +1758,10 @@ mod macos_tests {
                 found_current = true;
 
                 // Current thread must have valid context
-                if let Some(context) = thread.context {
+                if let Some(ref context) = thread.context {
                     // Check that we have valid register values
-                    match context.raw {
-                        minidump::RawContextCPU::Arm64(ref ctx) => {
+                    match &context.raw {
+                        minidump::MinidumpRawContext::Arm64(ctx) => {
                             assert!(ctx.context_flags != 0);
                             assert!(ctx.sp > 0x100000, "SP should be in user space");
                             assert!(ctx.sp < 0x800000000000, "SP should not be in kernel space");
@@ -1784,13 +1791,13 @@ mod macos_tests {
             md.get_stream().expect("ModuleList should be present");
 
         assert!(
-            !module_list.modules.is_empty(),
+            module_list.module_count() > 0,
             "Should have at least one module"
         );
 
         // Look for test binary
         let mut found_test_binary = false;
-        for module in module_list.modules {
+        for module in module_list.iter() {
             if module.name.contains("minidump") || module.name.contains("test") {
                 found_test_binary = true;
 
