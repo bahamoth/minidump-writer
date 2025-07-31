@@ -1,12 +1,21 @@
 use crate::{
-    apple::ios::{minidump_writer::MinidumpWriter, task_dumper::TaskDumper},
-    dir_section::DumpBuf,
-    mem_writer::*,
-    minidump_format::{
-        format::{BreakpadInfoValid, MINIDUMP_BREAKPAD_INFO as BreakpadInfo},
-        MDRawDirectory, MDStreamType,
+    apple::{
+        common::streams::breakpad_info::{self, BreakpadInfoWriter},
+        ios::{minidump_writer::MinidumpWriter, task_dumper::TaskDumper},
     },
+    dir_section::DumpBuf,
+    minidump_format::MDRawDirectory,
 };
+
+impl BreakpadInfoWriter for MinidumpWriter {
+    fn handler_thread(&self) -> u32 {
+        self.handler_thread.unwrap_or(0)
+    }
+
+    fn requesting_thread(&self) -> u32 {
+        self.crash_context.as_ref().map(|cc| cc.thread).unwrap_or(0)
+    }
+}
 
 impl MinidumpWriter {
     /// Writes the [`BreakpadInfo`] stream.
@@ -20,23 +29,7 @@ impl MinidumpWriter {
         buffer: &mut DumpBuf,
         _dumper: &TaskDumper,
     ) -> Result<MDRawDirectory, super::super::WriterError> {
-        let bp_section = MemoryWriter::<BreakpadInfo>::alloc_with_val(
-            buffer,
-            BreakpadInfo {
-                validity: BreakpadInfoValid::DumpThreadId.bits()
-                    | BreakpadInfoValid::RequestingThreadId.bits(),
-                // The thread where the exception port handled the exception, might
-                // be useful to ignore/deprioritize when processing the minidump
-                dump_thread_id: self.handler_thread.unwrap_or(0),
-                // The actual thread where the exception was thrown
-                requesting_thread_id: self.crash_context.as_ref().map(|cc| cc.thread).unwrap_or(0),
-            },
-        )
-        .map_err(|e| super::super::WriterError::MemoryWriterError(e.to_string()))?;
-
-        Ok(MDRawDirectory {
-            stream_type: MDStreamType::BreakpadInfoStream as u32,
-            location: bp_section.location(),
-        })
+        breakpad_info::write_breakpad_info(self, buffer)
+            .map_err(|e| super::super::WriterError::MemoryWriterError(e.to_string()))
     }
 }
