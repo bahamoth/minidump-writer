@@ -1437,7 +1437,7 @@ mod macos_tests {
         // Create a crash context
         let crash_context = IosCrashContext {
             task,
-            thread: Some(current_thread),
+            thread: current_thread,
             handler_thread: current_thread,
             exception: Some(IosExceptionInfo {
                 kind: 1, // EXC_BAD_ACCESS

@@ -71,7 +71,7 @@ Before claiming any task, agents must identify themselves:
 | T-017 | Implement iOS module list stream | DONE   | architect-hawkeye | T-015, #13 | Add missing module list stream to iOS implementation. Includes fixing stream count to be dynamic. PR submitted for review |
 | T-018 | Fix iOS register values not captured | DONE   | architect-hawkeye | #13 | Debug and fix thread_state reading issues causing empty register values in iOS simulator. PR submitted for review |
 | T-019 | Fix iOS module base address calculation for accurate symbolication | DONE   | architect-hawkeye | T-017 | Fix ASLR slide calculation in module_list.rs. Current base_of_image = load_address is incorrect, should be (vm_addr + slide). Fixed in PR fix-ios-address-accuracy |
-| T-020 | Add missing streams to iOS implementation | In-Review | architect-thor | T-019 | Add Breakpad Info, Thread Names, and Misc Info streams to match macOS functionality. Branch: feat/ios-missing-streams-t020 |
+| T-020 | Add missing streams to iOS implementation | In-Review | architect-thor | T-019, #15 | Add Breakpad Info, Thread Names, and Misc Info streams to match macOS functionality. Branch: feat/ios-missing-streams-t020 |
 
 
 ### Task Assignment History
