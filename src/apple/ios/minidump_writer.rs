@@ -88,7 +88,6 @@ impl MinidumpWriter {
                 Box::new(|mw, buffer, dumper| mw.write_module_list(buffer, dumper)),
                 Box::new(|mw, buffer, dumper| mw.write_misc_info(buffer, dumper)),
                 Box::new(|mw, buffer, dumper| mw.write_breakpad_info(buffer, dumper)),
-                Box::new(|mw, buffer, dumper| mw.write_thread_names(buffer, dumper)),
             ];
 
             // Exception stream is added conditionally if we have crash context
