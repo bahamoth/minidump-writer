@@ -3,7 +3,7 @@ use crate::{
     dir_section::{DirSection, DumpBuf},
     mem_writer::*,
     minidump_format::{
-        format::{MINIDUMP_SIGNATURE, MINIDUMP_VERSION},
+        format::{MD_HEADER_SIGNATURE, MD_HEADER_VERSION},
         MDLocationDescriptor, MDMemoryDescriptor, MDRawDirectory, MDRawHeader,
     },
 };
@@ -58,15 +58,21 @@ impl MinidumpWriter {
         }
     }
 
-    /// Sets the crash context for the minidump.
-    pub fn set_crash_context(&mut self, crash_context: IosCrashContext) {
+    /// Creates a minidump writer with the specified crash context
+    pub fn with_crash_context(crash_context: IosCrashContext) -> Self {
         // On iOS, we can only dump the current process
-        debug_assert_eq!(crash_context.task, unsafe {
-            mach2::traps::mach_task_self()
-        });
+        let task = crash_context.task;
+        debug_assert_eq!(task, unsafe { mach2::traps::mach_task_self() });
 
-        self.handler_thread = Some(crash_context.handler_thread);
-        self.crash_context = Some(crash_context);
+        let handler_thread = crash_context.handler_thread;
+
+        Self {
+            crash_context: Some(crash_context),
+            memory_blocks: Vec::new(),
+            task,
+            handler_thread: Some(handler_thread),
+            crashing_thread_context: None,
+        }
     }
 
     /// Writes a minidump to the specified destination
@@ -107,8 +113,8 @@ impl MinidumpWriter {
             })?;
 
         let header = MDRawHeader {
-            signature: MINIDUMP_SIGNATURE,
-            version: MINIDUMP_VERSION,
+            signature: MD_HEADER_SIGNATURE,
+            version: MD_HEADER_VERSION,
             stream_count: num_writers,
             stream_directory_rva: dir_section.position(),
             checksum: 0,
@@ -141,58 +147,6 @@ impl MinidumpWriter {
         }
 
         Ok(buffer.into())
-    }
-
-    // Stream writer methods
-    fn write_system_info(
-        &mut self,
-        buffer: &mut DumpBuf,
-        _dumper: &TaskDumper,
-    ) -> Result<MDRawDirectory> {
-        crate::apple::ios::streams::system_info::write_system_info(buffer)
-            .map_err(WriterError::from)
-    }
-
-    fn write_thread_list(
-        &mut self,
-        buffer: &mut DumpBuf,
-        dumper: &TaskDumper,
-    ) -> Result<MDRawDirectory> {
-        let (dirent, context) =
-            crate::apple::ios::streams::thread_list::write(self, buffer, dumper)
-                .map_err(WriterError::from)?;
-
-        // Store the crashing thread context for exception stream
-        self.crashing_thread_context = context;
-
-        Ok(dirent)
-    }
-
-    fn write_memory_list(
-        &mut self,
-        buffer: &mut DumpBuf,
-        dumper: &TaskDumper,
-    ) -> Result<MDRawDirectory> {
-        crate::apple::ios::streams::memory_list::write(self, buffer, dumper)
-            .map_err(WriterError::from)
-    }
-
-    fn write_module_list(
-        &mut self,
-        buffer: &mut DumpBuf,
-        dumper: &TaskDumper,
-    ) -> Result<MDRawDirectory> {
-        crate::apple::ios::streams::module_list::write(self, buffer, dumper)
-            .map_err(WriterError::from)
-    }
-
-    fn write_exception(
-        &mut self,
-        buffer: &mut DumpBuf,
-        _dumper: &TaskDumper,
-    ) -> Result<MDRawDirectory> {
-        crate::apple::ios::streams::exception::write(self, buffer, self.crashing_thread_context)
-            .map_err(WriterError::from)
     }
 }
 

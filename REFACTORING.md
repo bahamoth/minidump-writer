@@ -178,7 +178,17 @@ remain platform-specific.
   - `common/types.rs` (+200 lines)
 - **Guarantees**: Type-compatible, no behavior change
 
-### Phase 6: Documentation & Cleanup
+### Phase 6: API Alignment [COMPLETED]
+**PR: "refactor: align iOS API patterns with macOS"**
+- Changed iOS from `set_crash_context()` to `with_crash_context()` to match macOS
+- Updated constants from `MINIDUMP_SIGNATURE` to `MD_HEADER_SIGNATURE` to match macOS
+- Converted iOS standalone stream functions to MinidumpWriter methods to match macOS pattern
+- **Files affected**:
+  - `ios/minidump_writer.rs` (API changes)
+  - `ios/streams/*.rs` (converted to impl blocks)
+- **Guarantees**: API consistency, no functional changes
+
+### Phase 7: Documentation & Cleanup
 **PR: "docs: update architecture for iOS/macOS consolidation"**
 - Update ARCHITECTURE.md with new structure
 - Add migration guide for contributors

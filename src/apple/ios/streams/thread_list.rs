@@ -1,5 +1,8 @@
 use crate::{
-    apple::ios::{minidump_writer::MinidumpWriter, task_dumper::TaskDumper},
+    apple::ios::{
+        minidump_writer::{MinidumpWriter, WriterError},
+        task_dumper::TaskDumper,
+    },
     dir_section::DumpBuf,
     mem_writer::{MemoryArrayWriter, MemoryWriter},
     minidump_cpu::RawContextCPU,
@@ -17,100 +20,117 @@ pub const STACK_POINTER_NULL: u64 = 0xdeadbeef;
 /// Sentinel value indicating a stack read failure
 pub const STACK_READ_FAILED: u64 = 0xdeaddead;
 
-pub fn write(
-    config: &mut MinidumpWriter,
-    buffer: &mut DumpBuf,
-    dumper: &TaskDumper,
-) -> Result<(MDRawDirectory, Option<MDLocationDescriptor>)> {
-    let threads = dumper.read_threads().unwrap_or_default();
-    let num_threads = threads.len();
+impl MinidumpWriter {
+    pub(crate) fn write_thread_list(
+        &mut self,
+        buffer: &mut DumpBuf,
+        dumper: &TaskDumper,
+    ) -> std::result::Result<MDRawDirectory, super::super::WriterError> {
+        let (dirent, context) = self
+            .write_thread_list_impl(buffer, dumper)
+            .map_err(WriterError::from)?;
 
-    let list_header = MemoryWriter::<u32>::alloc_with_val(buffer, num_threads as u32)
-        .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
+        // Store the crashing thread context for exception stream
+        self.crashing_thread_context = context;
 
-    let mut dirent = MDRawDirectory {
-        stream_type: ThreadListStream as u32,
-        location: list_header.location(),
-    };
+        Ok(dirent)
+    }
 
-    let mut thread_list = MemoryArrayWriter::<MDRawThread>::alloc_array(buffer, num_threads)
-        .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
-    dirent.location.data_size += thread_list.location().data_size;
+    fn write_thread_list_impl(
+        &mut self,
+        buffer: &mut DumpBuf,
+        dumper: &TaskDumper,
+    ) -> Result<(MDRawDirectory, Option<MDLocationDescriptor>)> {
+        let threads = dumper.read_threads().unwrap_or_default();
+        let num_threads = threads.len();
 
-    let crashed_thread_id = config.crash_context.as_ref().map(|ctx| ctx.thread);
-    let mut crashing_thread_context = None;
+        let list_header = MemoryWriter::<u32>::alloc_with_val(buffer, num_threads as u32)
+            .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
 
-    for (idx, &tid) in threads.iter().enumerate() {
-        let mut thread = MDRawThread {
-            thread_id: tid,
-            suspend_count: 0,
-            priority_class: 0,
-            priority: 0,
-            teb: 0,
-            stack: MDMemoryDescriptor::default(),
-            thread_context: MDLocationDescriptor::default(),
+        let mut dirent = MDRawDirectory {
+            stream_type: ThreadListStream as u32,
+            location: list_header.location(),
         };
 
-        // Handle thread state and context
-        if Some(tid) == crashed_thread_id {
-            if let Some(context) = &config.crash_context {
-                // This is the crashing thread, use the context from the exception
-                let mut cpu = RawContextCPU::default();
-                context.fill_cpu_context(&mut cpu);
+        let mut thread_list = MemoryArrayWriter::<MDRawThread>::alloc_array(buffer, num_threads)
+            .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
+        dirent.location.data_size += thread_list.location().data_size;
 
-                let cpu_section = MemoryWriter::alloc_with_val(buffer, cpu)
-                    .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
-                thread.thread_context = cpu_section.location();
-                crashing_thread_context = Some(thread.thread_context);
+        let crashed_thread_id = self.crash_context.as_ref().map(|ctx| ctx.thread);
+        let mut crashing_thread_context = None;
 
-                // Get stack pointer from crash context
-                let sp = context.thread_state.sp();
-                write_stack_from_start_address(sp, &mut thread, buffer, dumper, config)?;
-            }
-        } else {
-            // For other threads, get the state from the dumper
-            match dumper.read_thread_state(tid) {
-                Ok(thread_state) => {
+        for (idx, &tid) in threads.iter().enumerate() {
+            let mut thread = MDRawThread {
+                thread_id: tid,
+                suspend_count: 0,
+                priority_class: 0,
+                priority: 0,
+                teb: 0,
+                stack: MDMemoryDescriptor::default(),
+                thread_context: MDLocationDescriptor::default(),
+            };
+
+            // Handle thread state and context
+            if Some(tid) == crashed_thread_id {
+                if let Some(context) = &self.crash_context {
+                    // This is the crashing thread, use the context from the exception
                     let mut cpu = RawContextCPU::default();
-                    thread_state.fill_cpu_context(&mut cpu);
+                    context.fill_cpu_context(&mut cpu);
 
                     let cpu_section = MemoryWriter::alloc_with_val(buffer, cpu)
                         .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
                     thread.thread_context = cpu_section.location();
+                    crashing_thread_context = Some(thread.thread_context);
 
-                    // Get stack pointer and write stack memory
-                    let sp = thread_state.sp();
-                    write_stack_from_start_address(sp, &mut thread, buffer, dumper, config)?;
+                    // Get stack pointer from crash context
+                    let sp = context.thread_state.sp();
+                    write_stack_from_start_address(sp, &mut thread, buffer, dumper, self)?;
                 }
-                Err(e) => {
-                    // Failed to read thread state - leave thread context as default (empty)
-                    eprintln!(
-                        "iOS: Failed to read thread state for thread {}: {:?}",
-                        tid, e
-                    );
+            } else {
+                // For other threads, get the state from the dumper
+                match dumper.read_thread_state(tid) {
+                    Ok(thread_state) => {
+                        let mut cpu = RawContextCPU::default();
+                        thread_state.fill_cpu_context(&mut cpu);
+
+                        let cpu_section = MemoryWriter::alloc_with_val(buffer, cpu)
+                            .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
+                        thread.thread_context = cpu_section.location();
+
+                        // Get stack pointer and write stack memory
+                        let sp = thread_state.sp();
+                        write_stack_from_start_address(sp, &mut thread, buffer, dumper, self)?;
+                    }
+                    Err(e) => {
+                        // Failed to read thread state - leave thread context as default (empty)
+                        eprintln!(
+                            "iOS: Failed to read thread state for thread {}: {:?}",
+                            tid, e
+                        );
+                    }
                 }
             }
+
+            // Try to get thread priority and suspend count
+            if let Ok(basic_info) =
+                dumper.thread_info::<crate::apple::ios::task_dumper::thread_basic_info>(tid)
+            {
+                thread.suspend_count = basic_info.suspend_count as u32;
+                // Priority is a complex calculation on macOS/iOS. The `policy` field is used here as a proxy for `priority`
+                // because macOS/iOS does not provide a direct thread priority value. The `policy` field represents the
+                // scheduling policy of the thread (e.g., timesharing, fixed priority, etc.), and its numeric value can
+                // vary depending on the system's implementation. Consumers of this value should be aware that it is not
+                // a direct priority metric but rather an approximation based on the thread's scheduling policy.
+                thread.priority = basic_info.policy as u32;
+            }
+
+            thread_list
+                .set_value_at(buffer, thread, idx)
+                .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
         }
 
-        // Try to get thread priority and suspend count
-        if let Ok(basic_info) =
-            dumper.thread_info::<crate::apple::ios::task_dumper::thread_basic_info>(tid)
-        {
-            thread.suspend_count = basic_info.suspend_count as u32;
-            // Priority is a complex calculation on macOS/iOS. The `policy` field is used here as a proxy for `priority`
-            // because macOS/iOS does not provide a direct thread priority value. The `policy` field represents the
-            // scheduling policy of the thread (e.g., timesharing, fixed priority, etc.), and its numeric value can
-            // vary depending on the system's implementation. Consumers of this value should be aware that it is not
-            // a direct priority metric but rather an approximation based on the thread's scheduling policy.
-            thread.priority = basic_info.policy as u32;
-        }
-
-        thread_list
-            .set_value_at(buffer, thread, idx)
-            .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
+        Ok((dirent, crashing_thread_context))
     }
-
-    Ok((dirent, crashing_thread_context))
 }
 
 /// Write stack memory for a thread
