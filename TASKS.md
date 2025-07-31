@@ -72,6 +72,7 @@ Before claiming any task, agents must identify themselves:
 | T-018 | Fix iOS register values not captured | DONE   | architect-hawkeye | #13 | Debug and fix thread_state reading issues causing empty register values in iOS simulator. PR submitted for review |
 | T-019 | Fix iOS module base address calculation for accurate symbolication | DONE   | architect-hawkeye | T-017 | Fix ASLR slide calculation in module_list.rs. Current base_of_image = load_address is incorrect, should be (vm_addr + slide). Fixed in PR fix-ios-address-accuracy |
 | T-020 | Add missing streams to iOS implementation | In-Review | architect-thor | T-019, #15 | Add Breakpad Info, Thread Names, and Misc Info streams to match macOS functionality. Branch: feat/ios-missing-streams-t020 |
+| T-021 | Investigate processor architecture detection in iOS minidumps | TODO | - | T-020 | Tests pass on CI but may not be using expected ARM64 context parsing path. Need to verify if PROCESSOR_ARCHITECTURE_ARM64_OLD is correctly recognized by minidump crate and check actual context type being used. Requires macOS development environment for debugging. |
 
 
 ### Task Assignment History
