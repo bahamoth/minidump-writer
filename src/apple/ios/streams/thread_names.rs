@@ -68,14 +68,17 @@ impl MinidumpWriter {
         _dumper: &TaskDumper,
         _tid: u32,
     ) -> Result<MDLocationDescriptor, super::super::WriterError> {
-        // On iOS, we need to use thread_info with THREAD_EXTENDED_INFO flavor
-        // However, this is not always available, so we fall back to empty name
+        // On iOS retrieving thread names reliably is difficult – the
+        // [`THREAD_EXTENDED_INFO`](https://developer.apple.com/documentation/kernel/thread_extended_info_data_t)
+        // flavor is not available to sandboxed processes and `pthread_getname_np` is
+        // restricted when the target thread lives in another task.  The Breakpad
+        // minidump format explicitly allows `thread_name_rva` to be `0` to
+        // indicate that a thread does not have an associated name.  Using `0`
+        // is more accurate than writing an empty string because it allows
+        // consumers to distinguish between “the writer could not determine the
+        // name” and “the name is an empty string”.  Down-stream code such as
+        // Mozilla’s `minidump-stackwalk` already relies on this semantics.
 
-        // For now, we'll just write empty names as thread naming on iOS
-        // is more restricted than macOS
-        // TODO: Investigate if we can use pthread_getname_np or similar
-
-        Ok(write_string_to_location(buffer, "")
-            .map_err(|e| super::super::WriterError::MemoryWriterError(e.to_string()))?)
+        Ok(MDLocationDescriptor { rva: 0, data_size: 0 })
     }
 }
