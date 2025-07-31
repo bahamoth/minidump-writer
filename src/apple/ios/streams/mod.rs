@@ -1,10 +1,13 @@
 // iOS stream writers
 
+pub mod breakpad_info;
 pub mod exception;
 pub mod memory_list;
+pub mod misc_info;
 pub mod module_list;
 pub mod system_info;
 pub mod thread_list;
+pub mod thread_names;
 
 // Re-export key functions for tests
 pub use exception::write as write_exception;
@@ -12,9 +15,6 @@ pub use memory_list::write as write_memory_list;
 pub use module_list::write as write_module_list;
 pub use system_info::write_system_info;
 pub use thread_list::write as write_thread_list;
-
-// System info stream is not yet implemented for iOS
-// pub use system_info::*;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StreamError {
