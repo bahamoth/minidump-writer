@@ -61,17 +61,17 @@ Before claiming any task, agents must identify themselves:
 | T-005 | Write iOS thread state dumper | DONE   | architect-strange | R-006 | ARM64 register state capture |
 | T-006 | Add iOS memory region mapper | DONE   | architect-t'challa | R-007 | Implemented memory list stream using existing get_vm_region for sandbox-safe memory access |
 | T-009 | Write iOS-specific tests | DOING  | architect-forge | R-012 | Unit and integration tests. Refactoring implementation to fix underlying issues.
-| T-010 | Add iOS simulator support | TODO   | - | R-011 | Feature flag for x86_64 builds |
+| T-010 | Add iOS simulator support | DONE   | - | R-011 | Feature flag for x86_64 builds |
 | T-011 | Document iOS platform limitations | TODO   | - | R-013 | Update README and docs |
-| T-012 | Create iOS example app | TODO   | - | R-014 | Swift/ObjC integration demo |
+| T-012 | Create iOS example app | DONE   | - | R-014 | Swift/ObjC integration demo |
 | T-013 | Implement iOS CrashContext | DONE   | architect-forge | R-001, R-002 | **BLOCKER**: crash-context crate doesn't support iOS. Need custom implementation for iOS MinidumpWriter |
 | T-014 | Fix iOS implementation compilation errors | DONE   | architect-forge | T-010, D-2025-07-18-01 | Merged into T-009. Was: Fix import paths, API compatibility, and architecture issues preventing iOS simulator builds |
-| T-015 | Refactor iOS stream count to dynamic calculation | TODO   | - | #12 | Currently hardcoded as 4. Should follow macOS pattern using writers array for better maintainability |
+| T-015 | Refactor iOS stream count to dynamic calculation | DONE   | - | #12 | Currently hardcoded as 4. Should follow macOS pattern using writers array for better maintainability |
 | T-016 | Implement function pre-binding for signal safety | TODO   | - | D-2025-07-28-01 | Pre-bind all lazy-bound functions before signal handler installation to avoid dyld deadlocks. Required for both macOS and iOS implementations per ARCHITECTURE.md guidelines |
-| T-017 | Implement iOS module list stream | DOING  | architect-hawkeye | T-015, #13 | Add missing module list stream to iOS implementation. Includes fixing stream count to be dynamic. PR submitted for review |
-| T-018 | Fix iOS register values not captured | DOING  | architect-hawkeye | #13 | Debug and fix thread_state reading issues causing empty register values in iOS simulator. PR submitted for review |
-| T-019 | Fix iOS module base address calculation for accurate symbolication | DONE | architect-hawkeye | T-017 | Fix ASLR slide calculation in module_list.rs. Current base_of_image = load_address is incorrect, should be (vm_addr + slide). Fixed in PR fix-ios-address-accuracy |
-| T-020 | Add missing streams to iOS implementation | TODO | - | T-019 | Add Breakpad Info, Thread Names, and Misc Info streams to match macOS functionality |
+| T-017 | Implement iOS module list stream | DONE   | architect-hawkeye | T-015, #13 | Add missing module list stream to iOS implementation. Includes fixing stream count to be dynamic. PR submitted for review |
+| T-018 | Fix iOS register values not captured | DONE   | architect-hawkeye | #13 | Debug and fix thread_state reading issues causing empty register values in iOS simulator. PR submitted for review |
+| T-019 | Fix iOS module base address calculation for accurate symbolication | DONE   | architect-hawkeye | T-017 | Fix ASLR slide calculation in module_list.rs. Current base_of_image = load_address is incorrect, should be (vm_addr + slide). Fixed in PR fix-ios-address-accuracy |
+| T-020 | Add missing streams to iOS implementation | In-Review | architect-thor | T-019 | Add Breakpad Info, Thread Names, and Misc Info streams to match macOS functionality. Branch: feat/ios-missing-streams-t020 |
 
 
 ### Task Assignment History
@@ -103,6 +103,8 @@ Before claiming any task, agents must identify themselves:
 2025-07-30: T-018: Status TODO → DOING (claimed by architect-hawkeye)
 2025-07-30: T-017: Status DOING → DONE (completed by architect-hawkeye)
 2025-07-30: T-019: Status TODO → DONE (completed by architect-hawkeye)
+2025-07-31: T-020: Status TODO → DOING (claimed by architect-thor)
+2025-07-31: T-020: Status DOING → In-Review (submitted by architect-thor)
 ```
 
 ## Templates

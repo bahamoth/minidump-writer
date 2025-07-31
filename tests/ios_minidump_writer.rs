@@ -1278,4 +1278,468 @@ mod macos_tests {
             "Should have floating point registers"
         );
     }
+
+    #[test]
+    fn test_breakpad_info_stream() {
+        let mut writer = MinidumpWriter::new();
+        let mut cursor = Cursor::new(Vec::new());
+
+        // Dump full minidump
+        let result = writer.dump(&mut cursor);
+        assert!(result.is_ok());
+
+        // Get the minidump bytes
+        let bytes = cursor.into_inner();
+
+        // Parse the header
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+
+        // Find the breakpad info stream
+        let mut breakpad_info_offset = None;
+        for i in 0..header.stream_count {
+            let dir_entry_offset = header.stream_directory_rva as usize
+                + (i as usize * std::mem::size_of::<MDRawDirectory>());
+            let dir_entry: MDRawDirectory = bytes
+                .pread(dir_entry_offset)
+                .expect("Failed to parse directory entry");
+
+            if dir_entry.stream_type == MDStreamType::BreakpadInfoStream as u32 {
+                breakpad_info_offset = Some(dir_entry.location.rva as usize);
+                break;
+            }
+        }
+
+        assert!(
+            breakpad_info_offset.is_some(),
+            "Breakpad info stream not found"
+        );
+        let offset = breakpad_info_offset.unwrap();
+
+        // Read the breakpad info
+        use minidump_common::format::MINIDUMP_BREAKPAD_INFO;
+        let breakpad_info: MINIDUMP_BREAKPAD_INFO =
+            bytes.pread(offset).expect("Failed to parse breakpad info");
+
+        // Verify validity flags
+        assert!(breakpad_info.validity != 0, "Should have validity flags");
+    }
+
+    #[test]
+    fn test_thread_names_stream() {
+        let mut writer = MinidumpWriter::new();
+        let mut cursor = Cursor::new(Vec::new());
+
+        // Dump full minidump
+        let result = writer.dump(&mut cursor);
+        assert!(result.is_ok());
+
+        // Get the minidump bytes
+        let bytes = cursor.into_inner();
+
+        // Parse the header
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+
+        // Find the thread names stream
+        let mut thread_names_offset = None;
+        for i in 0..header.stream_count {
+            let dir_entry_offset = header.stream_directory_rva as usize
+                + (i as usize * std::mem::size_of::<MDRawDirectory>());
+            let dir_entry: MDRawDirectory = bytes
+                .pread(dir_entry_offset)
+                .expect("Failed to parse directory entry");
+
+            if dir_entry.stream_type == MDStreamType::ThreadNamesStream as u32 {
+                thread_names_offset = Some(dir_entry.location.rva as usize);
+                break;
+            }
+        }
+
+        assert!(
+            thread_names_offset.is_some(),
+            "Thread names stream not found"
+        );
+        let offset = thread_names_offset.unwrap();
+
+        // Read thread count
+        let thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
+        assert!(thread_count >= 1, "Should have at least one thread name");
+
+        // Read first thread name entry
+        let names_offset = offset + 4;
+        let first_thread_name: MDRawThreadName = bytes
+            .pread(names_offset)
+            .expect("Failed to parse first thread name");
+
+        // Verify thread has valid ID
+        assert!(
+            first_thread_name.thread_id > 0,
+            "Thread should have valid ID"
+        );
+        assert!(
+            first_thread_name.thread_name_rva > 0,
+            "Thread should have name RVA"
+        );
+    }
+
+    #[test]
+    fn test_misc_info_stream() {
+        let mut writer = MinidumpWriter::new();
+        let mut cursor = Cursor::new(Vec::new());
+
+        // Dump full minidump
+        let result = writer.dump(&mut cursor);
+        assert!(result.is_ok());
+
+        // Get the minidump bytes
+        let bytes = cursor.into_inner();
+
+        // Parse the header
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+
+        // Find the misc info stream
+        let mut misc_info_offset = None;
+        for i in 0..header.stream_count {
+            let dir_entry_offset = header.stream_directory_rva as usize
+                + (i as usize * std::mem::size_of::<MDRawDirectory>());
+            let dir_entry: MDRawDirectory = bytes
+                .pread(dir_entry_offset)
+                .expect("Failed to parse directory entry");
+
+            if dir_entry.stream_type == MDStreamType::MiscInfoStream as u32 {
+                misc_info_offset = Some(dir_entry.location.rva as usize);
+                break;
+            }
+        }
+
+        assert!(misc_info_offset.is_some(), "Misc info stream not found");
+        let offset = misc_info_offset.unwrap();
+
+        // Read the misc info
+        use minidump_common::format::MINIDUMP_MISC_INFO_2;
+        let misc_info: MINIDUMP_MISC_INFO_2 =
+            bytes.pread(offset).expect("Failed to parse misc info");
+
+        // Verify basic fields
+        assert_eq!(
+            misc_info.size_of_info,
+            std::mem::size_of::<MINIDUMP_MISC_INFO_2>() as u32
+        );
+        assert!(misc_info.flags1 != 0, "Should have flags set");
+        assert!(misc_info.process_id > 0, "Should have valid process ID");
+    }
+
+    #[test]
+    fn test_breakpad_info_with_crash_context() {
+        let mut writer = MinidumpWriter::new();
+        let task = unsafe { mach2::traps::mach_task_self() };
+        let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
+
+        // Create a crash context
+        let crash_context = IosCrashContext {
+            task,
+            thread: Some(current_thread),
+            handler_thread: current_thread,
+            exception: Some(IosExceptionInfo {
+                kind: 1, // EXC_BAD_ACCESS
+                code: 1, // KERN_INVALID_ADDRESS
+                subcode: Some(0x1234),
+            }),
+            thread_state: minidump_writer::apple::common::mach::ThreadState::default(),
+        };
+
+        // Set the crash context on the writer
+        writer.set_crash_context(crash_context);
+
+        let mut cursor = Cursor::new(Vec::new());
+
+        // Dump full minidump
+        let result = writer.dump(&mut cursor);
+        assert!(result.is_ok());
+
+        // Get the minidump bytes
+        let bytes = cursor.into_inner();
+
+        // Parse the header
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+
+        // Should have exception stream now
+        assert!(
+            header.stream_count > 4,
+            "Should have more than 4 streams with exception"
+        );
+
+        // Find the breakpad info stream
+        let mut breakpad_info_offset = None;
+        for i in 0..header.stream_count {
+            let dir_entry_offset = header.stream_directory_rva as usize
+                + (i as usize * std::mem::size_of::<MDRawDirectory>());
+            let dir_entry: MDRawDirectory = bytes
+                .pread(dir_entry_offset)
+                .expect("Failed to parse directory entry");
+
+            if dir_entry.stream_type == MDStreamType::BreakpadInfoStream as u32 {
+                breakpad_info_offset = Some(dir_entry.location.rva as usize);
+                break;
+            }
+        }
+
+        assert!(
+            breakpad_info_offset.is_some(),
+            "Breakpad info stream not found"
+        );
+        let offset = breakpad_info_offset.unwrap();
+
+        // Read the breakpad info
+        use minidump_common::format::{BreakpadInfoValid, MINIDUMP_BREAKPAD_INFO};
+        let breakpad_info: MINIDUMP_BREAKPAD_INFO =
+            bytes.pread(offset).expect("Failed to parse breakpad info");
+
+        // Verify has both dump and requesting thread IDs
+        assert_eq!(
+            breakpad_info.validity & BreakpadInfoValid::DumpThreadId.bits(),
+            BreakpadInfoValid::DumpThreadId.bits(),
+            "Should have dump thread ID"
+        );
+        assert_eq!(
+            breakpad_info.validity & BreakpadInfoValid::RequestingThreadId.bits(),
+            BreakpadInfoValid::RequestingThreadId.bits(),
+            "Should have requesting thread ID"
+        );
+
+        // Verify thread IDs are set
+        assert_eq!(breakpad_info.dump_thread_id, current_thread);
+        assert_eq!(breakpad_info.requesting_thread_id, current_thread);
+    }
+
+    #[test]
+    fn test_stream_count_with_new_streams() {
+        let mut writer = MinidumpWriter::new();
+        let mut cursor = Cursor::new(Vec::new());
+
+        // Dump full minidump without exception
+        let result = writer.dump(&mut cursor);
+        assert!(result.is_ok());
+
+        // Get the minidump bytes
+        let bytes = cursor.into_inner();
+
+        // Parse the header
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+
+        // Should have 7 streams without exception:
+        // system info, thread list, memory list, module list, misc info, breakpad info, thread names
+        assert_eq!(
+            header.stream_count, 7,
+            "Should have 7 streams without exception"
+        );
+
+        // Verify all expected stream types are present
+        let mut found_streams = std::collections::HashSet::new();
+        for i in 0..header.stream_count {
+            let dir_entry_offset = header.stream_directory_rva as usize
+                + (i as usize * std::mem::size_of::<MDRawDirectory>());
+            let dir_entry: MDRawDirectory = bytes
+                .pread(dir_entry_offset)
+                .expect("Failed to parse directory entry");
+
+            found_streams.insert(dir_entry.stream_type);
+        }
+
+        assert!(found_streams.contains(&(MDStreamType::SystemInfoStream as u32)));
+        assert!(found_streams.contains(&(MDStreamType::ThreadListStream as u32)));
+        assert!(found_streams.contains(&(MDStreamType::MemoryListStream as u32)));
+        assert!(found_streams.contains(&(MDStreamType::ModuleListStream as u32)));
+        assert!(found_streams.contains(&(MDStreamType::MiscInfoStream as u32)));
+        assert!(found_streams.contains(&(MDStreamType::BreakpadInfoStream as u32)));
+        assert!(found_streams.contains(&(MDStreamType::ThreadNamesStream as u32)));
+    }
+
+    #[test]
+    fn test_module_base_address_calculation() {
+        // Test for fix in commit a743db0c: module base address should be (vm_addr + slide)
+        let mut writer = MinidumpWriter::new();
+        let mut cursor = Cursor::new(Vec::new());
+
+        // Dump full minidump
+        let result = writer.dump(&mut cursor);
+        assert!(result.is_ok());
+
+        // Get the minidump bytes
+        let bytes = cursor.into_inner();
+
+        // Parse the header
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+
+        // Find the module list stream
+        let mut module_list_offset = None;
+        for i in 0..header.stream_count {
+            let dir_entry_offset = header.stream_directory_rva as usize
+                + (i as usize * std::mem::size_of::<MDRawDirectory>());
+            let dir_entry: MDRawDirectory = bytes
+                .pread(dir_entry_offset)
+                .expect("Failed to parse directory entry");
+
+            if dir_entry.stream_type == MDStreamType::ModuleListStream as u32 {
+                module_list_offset = Some(dir_entry.location.rva as usize);
+                break;
+            }
+        }
+
+        assert!(module_list_offset.is_some(), "Module list stream not found");
+        let offset = module_list_offset.unwrap();
+
+        // Read module count
+        let module_count: u32 = bytes.pread(offset).expect("Failed to parse module count");
+        assert!(module_count > 0, "Should have at least one module");
+
+        // Check each module's base address
+        let modules_offset = offset + 4;
+        for i in 0..module_count as usize {
+            let module_offset = modules_offset + (i * std::mem::size_of::<MDRawModule>());
+            let module: MDRawModule = bytes
+                .pread(module_offset)
+                .expect(&format!("Failed to parse module {}", i));
+
+            // Verify module has valid base address and size
+            assert!(
+                module.base_of_image > 0,
+                "Module {} should have valid base address",
+                i
+            );
+            assert!(
+                module.size_of_image > 0,
+                "Module {} should have valid size",
+                i
+            );
+
+            // For main executable, verify it's in expected range
+            // iOS executables typically load at high addresses due to ASLR
+            if i == 0 {
+                // First module is usually the main executable
+                // On 64-bit iOS, addresses are typically > 0x100000000
+                assert!(
+                    module.base_of_image > 0x100000000,
+                    "Main executable should be at high address due to ASLR, got 0x{:x}",
+                    module.base_of_image
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_simplified_thread_state_reading() {
+        // Test for fix in commit 11542c31: simplified thread state reading
+        let task = unsafe { mach2::traps::mach_task_self() };
+        let dumper = TaskDumper::new(task).unwrap();
+
+        // Get thread list
+        let threads = dumper.read_threads().unwrap();
+        assert!(!threads.is_empty());
+
+        // Test reading thread state for current thread
+        let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
+        let thread_state = dumper.read_thread_state(current_thread);
+
+        // Should succeed for current thread
+        assert!(
+            thread_state.is_ok(),
+            "Should be able to read current thread state"
+        );
+
+        let state = thread_state.unwrap();
+
+        // Verify register values are populated
+        let sp = state.sp();
+        let pc = state.pc();
+
+        assert!(sp != 0, "Stack pointer should not be zero");
+        assert!(pc != 0, "Program counter should not be zero");
+
+        // On ARM64, verify the state has proper size
+        assert_eq!(
+            state.state_size,
+            mach::ARM_THREAD_STATE64_COUNT,
+            "Thread state should have correct size"
+        );
+    }
+
+    #[test]
+    fn test_thread_register_values_in_minidump() {
+        // Test that thread register values are properly captured in minidump
+        let mut writer = MinidumpWriter::new();
+        let mut cursor = Cursor::new(Vec::new());
+
+        // Dump full minidump
+        let result = writer.dump(&mut cursor);
+        assert!(result.is_ok());
+
+        // Get the minidump bytes
+        let bytes = cursor.into_inner();
+
+        // Parse the header
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+
+        // Find the thread list stream
+        let mut thread_list_offset = None;
+        for i in 0..header.stream_count {
+            let dir_entry_offset = header.stream_directory_rva as usize
+                + (i as usize * std::mem::size_of::<MDRawDirectory>());
+            let dir_entry: MDRawDirectory = bytes
+                .pread(dir_entry_offset)
+                .expect("Failed to parse directory entry");
+
+            if dir_entry.stream_type == MDStreamType::ThreadListStream as u32 {
+                thread_list_offset = Some(dir_entry.location.rva as usize);
+                break;
+            }
+        }
+
+        assert!(thread_list_offset.is_some(), "Thread list stream not found");
+        let offset = thread_list_offset.unwrap();
+
+        // Read thread count
+        let thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
+        assert!(thread_count >= 1, "Should have at least one thread");
+
+        // Check first thread's context
+        let thread_offset = offset + 4;
+        let first_thread: MDRawThread = bytes
+            .pread(thread_offset)
+            .expect("Failed to parse first thread");
+
+        // Verify thread has context
+        assert!(
+            first_thread.thread_context.rva > 0,
+            "Thread should have context"
+        );
+        assert!(
+            first_thread.thread_context.data_size > 0,
+            "Thread context should have size"
+        );
+
+        // Read the context
+        let context_offset = first_thread.thread_context.rva as usize;
+
+        // For ARM64, read key register values from context
+        // The context structure starts with context_flags (u64), then registers
+        let _context_flags: u64 = bytes
+            .pread(context_offset)
+            .expect("Failed to parse context flags");
+
+        // Read SP (x29) and PC (x30) values
+        // In ARM64 context, registers start after context_flags (8 bytes)
+        // x0-x28 = 29 registers * 8 bytes = 232 bytes
+        // x29 (FP/SP) is at offset 8 + 232 = 240
+        // x30 (LR) is at offset 8 + 240 = 248
+        // PC is at offset 8 + 248 = 256
+        let sp_offset = context_offset + 8 + (29 * 8); // x29
+        let pc_offset = context_offset + 8 + (30 * 8) + 8; // PC after x30
+
+        let sp: u64 = bytes.pread(sp_offset).expect("Failed to read SP");
+        let pc: u64 = bytes.pread(pc_offset).expect("Failed to read PC");
+
+        // Verify register values are non-zero
+        assert!(sp != 0, "Stack pointer should not be zero in context");
+        assert!(pc != 0, "Program counter should not be zero in context");
+    }
 }
