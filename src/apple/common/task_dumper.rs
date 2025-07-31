@@ -1,4 +1,4 @@
-// Base TaskDumper implementation shared between Apple platforms
+// Common TaskDumper implementation shared between Apple platforms
 
 use super::{mach, types::*};
 use mach2::mach_types as mt;
@@ -26,15 +26,14 @@ macro_rules! mach_call {
 
 pub(in crate::apple) use mach_call;
 
-/// Base implementation for TaskDumper with common functionality
-/// for all Apple platforms
-pub struct TaskDumperBase {
+/// Common implementation for TaskDumper shared between Apple platforms
+pub struct TaskDumper {
     pub(crate) task: mt::task_t,
     pub(crate) page_size: i64,
 }
 
-impl TaskDumperBase {
-    /// Constructs a [`TaskDumperBase`] for the specified task
+impl TaskDumper {
+    /// Constructs a [`TaskDumper`] for the specified task
     pub fn new(task: mt::task_t) -> Self {
         Self {
             task,
@@ -180,7 +179,7 @@ impl TaskDumperBase {
     }
 
     /// Get basic task info
-    pub fn task_info<T: mach::TaskInfo>(&self) -> Result<T, TaskDumpError> {
+    pub(crate) fn task_info<T: mach::TaskInfo>(&self) -> Result<T, TaskDumpError> {
         let mut info = std::mem::MaybeUninit::<T>::uninit();
         let mut count = (std::mem::size_of::<T>() / std::mem::size_of::<u32>()) as u32;
 
@@ -214,4 +213,32 @@ impl TaskDumperBase {
         // length...trust that it's accurate
         Ok(unsafe { std::slice::from_raw_parts(threads, thread_count as usize) })
     }
+}
+
+/// Platform-specific extensions to TaskDumper
+///
+/// This trait contains methods that have different implementations between
+/// macOS and iOS. Each platform provides its own implementation in their
+/// respective modules.
+pub trait TaskDumperExt {
+    /// Retrieves all loaded images/modules in the process
+    fn read_images(&self) -> Result<(AllImagesInfo, Vec<ImageInfo>), TaskDumpError>;
+
+    /// Finds and returns the main executable image
+    fn read_executable_image(&self) -> Result<ImageInfo, TaskDumpError>;
+
+    /// Gets VM region information for a specific address
+    fn get_vm_region(&self, addr: u64) -> Result<VMRegionInfo, TaskDumpError>;
+
+    /// Reads load commands for a Mach-O image
+    fn read_load_commands(&self, image: &ImageInfo) -> Result<mach::LoadCommands, TaskDumpError>;
+
+    /// Reads thread state for the specified thread
+    fn read_thread_state(&self, tid: u32) -> Result<mach::ThreadState, TaskDumpError>;
+
+    /// Gets thread info for the specified thread
+    fn thread_info<T: mach::ThreadInfo>(&self, tid: u32) -> Result<T, TaskDumpError>;
+
+    /// Gets the process ID for the task
+    fn pid_for_task(&self) -> Result<i32, TaskDumpError>;
 }

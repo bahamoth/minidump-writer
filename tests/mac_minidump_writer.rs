@@ -65,6 +65,7 @@ fn capture_minidump(name: &str, exception_kind: u32) -> Captured<'_> {
         .expect("failed to send ack");
 
     child.kill().expect("failed to kill child");
+    let _ = child.wait();
 
     let minidump = Minidump::read_path(tmpfile.path()).expect("failed to read minidump");
 

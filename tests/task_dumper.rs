@@ -1,7 +1,7 @@
 //! All of these tests are specific to the MacOS task dumper
 #![cfg(target_os = "macos")]
 
-use minidump_writer::{mach::LoadCommand, task_dumper::TaskDumper};
+use minidump_writer::{apple::common::TaskDumperExt, mach::LoadCommand, task_dumper::TaskDumper};
 use std::fmt::Write;
 
 fn call_otool(args: &[&str]) -> String {

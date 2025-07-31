@@ -168,14 +168,11 @@ struct WrappedException {
 /// Will return `None` if the specified code is wrapping an exception that
 /// should not be possible to be wrapped in an `EXC_CRASH`
 #[inline]
+#[allow(clippy::unnecessary_lazy_evaluations)]
 fn recover_exc_crash_wrapped_exception(code: u64) -> Option<WrappedException> {
-    if is_valid_exc_crash(code) {
-        Some(WrappedException {
-            kind: ((code >> 20) & 0xf) as u32,
-            code: (code & 0xfffff) as u32,
-            _signal: ((code >> 24) & 0xff) as u8,
-        })
-    } else {
-        None
-    }
+    is_valid_exc_crash(code).then(|| WrappedException {
+        kind: ((code >> 20) & 0xf) as u32,
+        code: (code & 0xfffff) as u32,
+        _signal: ((code >> 24) & 0xff) as u8,
+    })
 }

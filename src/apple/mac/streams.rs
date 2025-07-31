@@ -14,5 +14,5 @@ use super::{
     minidump_writer::MinidumpWriter,
     task_dumper::{ImageInfo, TaskDumper},
 };
-use crate::apple::common::{mach, TaskDumpError};
+use crate::apple::common::{mach, TaskDumpError, TaskDumperExt};
 use crate::{dir_section::DumpBuf, mem_writer::*, minidump_format::*};

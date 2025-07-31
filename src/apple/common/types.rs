@@ -2,6 +2,17 @@
 
 use thiserror::Error;
 
+// Unified CrashContext types for Apple platforms
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "macos")] {
+        pub use crash_context::CrashContext;
+        pub use crash_context::ExceptionInfo;
+    } else if #[cfg(target_os = "ios")] {
+        pub use crate::apple::ios::crash_context::IosCrashContext as CrashContext;
+        pub use crate::apple::ios::crash_context::IosExceptionInfo as ExceptionInfo;
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum TaskDumpError {
     #[error("kernel error {syscall} {error}")]
