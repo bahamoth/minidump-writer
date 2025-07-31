@@ -91,9 +91,9 @@ pub fn write_misc_info<T: TaskDumperHelper>(
         location: info_section.location(),
     };
 
-    let pid = dumper.pid_for_task().map_err(|e| {
-        MemoryWriterError::IOError(std::io::Error::new(std::io::ErrorKind::Other, e))
-    })?;
+    let pid = dumper
+        .pid_for_task()
+        .map_err(|e| MemoryWriterError::IOError(std::io::Error::other(e)))?;
 
     let mut misc_info = MDRawMiscInfo {
         size_of_info: std::mem::size_of::<MDRawMiscInfo>() as u32,

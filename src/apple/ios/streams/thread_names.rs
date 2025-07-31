@@ -64,7 +64,7 @@ impl MinidumpWriter {
     /// Attempts to retrieve and write the thread name, returning the thread names
     /// location if successful
     fn write_thread_name(
-        buffer: &mut DumpBuf,
+        _buffer: &mut DumpBuf,
         _dumper: &TaskDumper,
         _tid: u32,
     ) -> Result<MDLocationDescriptor, super::super::WriterError> {
