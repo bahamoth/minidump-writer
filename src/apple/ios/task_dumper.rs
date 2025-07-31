@@ -112,21 +112,16 @@ impl TaskDumper {
         unsafe { Ok(thread_info.assume_init()) }
     }
 
-    /// Get PID for the current task
+    /// Get the process ID for the task.
     ///
     /// # iOS Limitations
     /// Can only return PID for the current process. Attempting to get PID
     /// for other tasks will fail with SecurityRestriction error.
-    pub fn pid(&self) -> Result<i32, TaskDumpError> {
+    pub fn pid_for_task(&self) -> Result<i32, TaskDumpError> {
         self.check_current_process()?;
 
         // On iOS, we can only get our own PID
         Ok(unsafe { libc::getpid() })
-    }
-
-    /// Alias for pid() to maintain interface compatibility with macOS
-    pub fn pid_for_task(&self) -> Result<i32, TaskDumpError> {
-        self.pid()
     }
 
     /// Get images/modules loaded in the process using dyld API

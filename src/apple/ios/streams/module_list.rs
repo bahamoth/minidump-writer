@@ -13,7 +13,10 @@
 use crate::{
     apple::{
         common::mach,
-        ios::{MinidumpWriter, TaskDumper},
+        ios::{
+            minidump_writer::{MinidumpWriter, WriterError},
+            task_dumper::TaskDumper,
+        },
     },
     dir_section::DumpBuf,
     mem_writer::{write_string_to_location, MemoryArrayWriter, MemoryWriter},
@@ -43,29 +46,41 @@ struct ImageDetails {
     version: Option<u32>,
 }
 
-/// Writes the module list stream for iOS
-pub fn write(
-    _writer: &mut MinidumpWriter,
-    buffer: &mut DumpBuf,
-    dumper: &TaskDumper,
-) -> Result<MDRawDirectory, super::StreamError> {
-    let modules = write_loaded_modules(buffer, dumper)?;
-
-    let list_header = MemoryWriter::<u32>::alloc_with_val(buffer, modules.len() as u32)
-        .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
-
-    let mut dirent = MDRawDirectory {
-        stream_type: MDStreamType::ModuleListStream as u32,
-        location: list_header.location(),
-    };
-
-    if !modules.is_empty() {
-        let modules_section = MemoryArrayWriter::<MDRawModule>::alloc_from_iter(buffer, modules)
-            .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
-        dirent.location.data_size += modules_section.location().data_size;
+impl MinidumpWriter {
+    /// Writes the module list stream for iOS
+    pub(crate) fn write_module_list(
+        &mut self,
+        buffer: &mut DumpBuf,
+        dumper: &TaskDumper,
+    ) -> Result<MDRawDirectory, super::super::WriterError> {
+        self.write_module_list_impl(buffer, dumper)
+            .map_err(WriterError::from)
     }
 
-    Ok(dirent)
+    fn write_module_list_impl(
+        &self,
+        buffer: &mut DumpBuf,
+        dumper: &TaskDumper,
+    ) -> Result<MDRawDirectory, super::StreamError> {
+        let modules = write_loaded_modules(buffer, dumper)?;
+
+        let list_header = MemoryWriter::<u32>::alloc_with_val(buffer, modules.len() as u32)
+            .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
+
+        let mut dirent = MDRawDirectory {
+            stream_type: MDStreamType::ModuleListStream as u32,
+            location: list_header.location(),
+        };
+
+        if !modules.is_empty() {
+            let modules_section =
+                MemoryArrayWriter::<MDRawModule>::alloc_from_iter(buffer, modules)
+                    .map_err(|e| super::StreamError::MemoryWriterError(e.to_string()))?;
+            dirent.location.data_size += modules_section.location().data_size;
+        }
+
+        Ok(dirent)
+    }
 }
 
 fn write_loaded_modules(
