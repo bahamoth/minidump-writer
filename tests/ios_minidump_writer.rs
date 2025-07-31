@@ -343,6 +343,7 @@ mod macos_tests {
         MinidumpSystemInfo, MinidumpThreadList, MinidumpThreadNames, Module,
     };
     use minidump_common::format::PlatformId;
+    use minidump_writer::apple::ios::task_dumper::TaskDumper;
     use minidump_writer::dir_section::DumpBuf;
     use minidump_writer::ios_test::*;
     use minidump_writer::minidump_format::*;
@@ -362,11 +363,12 @@ mod macos_tests {
 
     #[test]
     fn test_write_system_info() {
+        let mut writer = MinidumpWriter::new();
+        let dumper = TaskDumper::new(unsafe { mach2::traps::mach_task_self() }).unwrap();
         let mut buffer = DumpBuf::with_capacity(0);
 
         // Write system info
-        let result =
-            minidump_writer::apple::ios::streams::system_info::write_system_info(&mut buffer);
+        let result = writer.write_system_info(&mut buffer, &dumper);
         assert!(result.is_ok());
 
         let dirent = result.unwrap();
@@ -425,11 +427,12 @@ mod macos_tests {
 
     #[test]
     fn test_system_info_contents() {
+        let mut writer = MinidumpWriter::new();
+        let dumper = TaskDumper::new(unsafe { mach2::traps::mach_task_self() }).unwrap();
         let mut buffer = DumpBuf::with_capacity(0);
 
         // Write system info
-        let result =
-            minidump_writer::apple::ios::streams::system_info::write_system_info(&mut buffer);
+        let result = writer.write_system_info(&mut buffer, &dumper);
         assert!(result.is_ok());
 
         // Read back the system info
@@ -530,11 +533,7 @@ mod macos_tests {
         let mut buffer = DumpBuf::with_capacity(0);
 
         // Write thread list directly
-        let result = minidump_writer::apple::ios::streams::thread_list::write(
-            &mut writer,
-            &mut buffer,
-            &dumper,
-        );
+        let result = writer.write_thread_list(&mut buffer, &dumper);
         assert!(result.is_ok());
 
         let (dirent, _) = result.unwrap();
@@ -758,11 +757,7 @@ mod macos_tests {
 
         // We can't easily simulate a real stack overflow, but we can test
         // the handling logic by checking that the sentinel values are properly used
-        let result = minidump_writer::apple::ios::streams::thread_list::write(
-            &mut writer,
-            &mut buffer,
-            &dumper,
-        );
+        let result = writer.write_thread_list(&mut buffer, &dumper);
         assert!(result.is_ok());
 
         let (dirent, _) = result.unwrap();
@@ -855,17 +850,13 @@ mod macos_tests {
         };
 
         // Set the crash context on the writer
-        writer.set_crash_context(crash_context);
+        writer = MinidumpWriter::with_crash_context(crash_context);
 
         let dumper = TaskDumper::new(task).unwrap();
         let mut buffer = DumpBuf::with_capacity(0);
 
         // Write thread list with crash context
-        let result = minidump_writer::apple::ios::streams::thread_list::write(
-            &mut writer,
-            &mut buffer,
-            &dumper,
-        );
+        let result = writer.write_thread_list(&mut buffer, &dumper);
         assert!(result.is_ok());
 
         let (_dirent, crashed_thread_context) = result.unwrap();
@@ -890,11 +881,7 @@ mod macos_tests {
         let mut buffer = DumpBuf::with_capacity(0);
 
         // First write thread list to populate memory_blocks
-        let result = minidump_writer::apple::ios::streams::thread_list::write(
-            &mut writer,
-            &mut buffer,
-            &dumper,
-        );
+        let result = writer.write_thread_list(&mut buffer, &dumper);
         assert!(result.is_ok());
 
         // Verify we have some memory blocks from thread stacks
@@ -908,11 +895,7 @@ mod macos_tests {
         let initial_blocks = 1; // Assume at least one block
 
         // Now write memory list
-        let memory_result = minidump_writer::apple::ios::streams::memory_list::write(
-            &mut writer,
-            &mut buffer,
-            &dumper,
-        );
+        let memory_result = writer.write_memory_list(&mut buffer, &dumper);
         assert!(memory_result.is_ok());
 
         let dirent = memory_result.unwrap();
@@ -960,22 +943,17 @@ mod macos_tests {
         };
 
         // Set the crash context on the writer
-        writer.set_crash_context(crash_context);
+        writer = MinidumpWriter::with_crash_context(crash_context);
 
         let mut buffer = DumpBuf::with_capacity(0);
 
         // Write thread list first
-        minidump_writer::apple::ios::streams::thread_list::write(&mut writer, &mut buffer, &dumper)
-            .unwrap();
+        writer.write_thread_list(&mut buffer, &dumper).unwrap();
         // Can't access private field in tests
         // let blocks_before = writer.memory_blocks.len();
 
         // Write memory list - should include IP memory for exception
-        let result = minidump_writer::apple::ios::streams::memory_list::write(
-            &mut writer,
-            &mut buffer,
-            &dumper,
-        );
+        let result = writer.write_memory_list(&mut buffer, &dumper);
         assert!(result.is_ok());
 
         // With an exception, we might have added memory around the IP
@@ -1402,7 +1380,7 @@ mod macos_tests {
         };
 
         // Set the crash context on the writer
-        writer.set_crash_context(crash_context);
+        writer = MinidumpWriter::with_crash_context(crash_context);
 
         let mut cursor = Cursor::new(Vec::new());
 
