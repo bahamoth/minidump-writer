@@ -121,6 +121,8 @@ impl MinidumpWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::apple::ios::{minidump_writer::MinidumpWriter, task_dumper::TaskDumper};
+    use crate::minidump_format::MDStreamType;
 
     #[test]
     fn test_ios_version_parsing() {
@@ -153,5 +155,28 @@ mod tests {
 
         // Reasonable upper bound
         assert!(count <= 16);
+    }
+
+    #[test]
+    #[cfg(all(
+        any(target_os = "macos", target_os = "ios"),
+        feature = "test-ios-on-macos"
+    ))]
+    fn test_write_system_info() {
+        let mut writer = MinidumpWriter::new();
+        let dumper = TaskDumper::new(unsafe { mach2::traps::mach_task_self() }).unwrap();
+        let mut buffer = DumpBuf::with_capacity(0);
+
+        // Write system info
+        let result = writer.write_system_info(&mut buffer, &dumper);
+        assert!(result.is_ok());
+
+        let dirent = result.unwrap();
+        assert_eq!(dirent.stream_type, MDStreamType::SystemInfoStream as u32);
+        assert!(dirent.location.data_size > 0);
+        assert_eq!(
+            dirent.location.data_size as usize,
+            std::mem::size_of::<MDRawSystemInfo>()
+        );
     }
 }
