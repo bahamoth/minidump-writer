@@ -1748,6 +1748,12 @@ mod macos_tests {
         let _: MinidumpBreakpadInfo = md.get_stream().expect("BreakpadInfo should be present");
         let _: MinidumpThreadNames = md.get_stream().expect("ThreadNames should be present");
 
+        // Get system info and misc info for context parsing
+        let system_info = md
+            .get_stream::<MinidumpSystemInfo>()
+            .expect("SystemInfo stream should be present");
+        let misc_info = md.get_stream::<MinidumpMiscInfo>().ok();
+
         // Get current thread for comparison
         let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
 
@@ -1758,11 +1764,7 @@ mod macos_tests {
                 found_current = true;
 
                 // Current thread must have valid context
-                let context = thread
-                    .context(&md.system_info, &md.misc_info)
-                    .expect("Failed to get thread context");
-
-                if let Some(context) = context {
+                if let Some(context) = thread.context(&system_info, misc_info.as_ref()) {
                     // Check that we have valid register values
                     match &context.raw {
                         minidump::MinidumpRawContext::Arm64(ctx) => {
