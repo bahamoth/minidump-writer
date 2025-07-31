@@ -5,6 +5,7 @@ pub mod mach;
 pub mod task_dumper_base;
 
 pub(in crate::apple) use task_dumper_base::mach_call;
+pub mod streams;
 pub mod types;
 
 pub use task_dumper_base::TaskDumperBase;
