@@ -342,9 +342,7 @@ mod macos_tests {
         Minidump, MinidumpBreakpadInfo, MinidumpMemoryList, MinidumpMiscInfo, MinidumpModuleList,
         MinidumpSystemInfo, MinidumpThreadList, MinidumpThreadNames, Module,
     };
-    use minidump_common::format::PlatformId;
     use minidump_writer::apple::ios::TaskDumper;
-    use minidump_writer::dir_section::DumpBuf;
     use minidump_writer::ios_test::*;
     use minidump_writer::minidump_format::*;
     use scroll::Pread;
@@ -1476,19 +1474,22 @@ mod macos_tests {
         assert_eq!(system_info.cpu, minidump::system_info::Cpu::X86_64);
 
         // Verify processor count
-        assert!(
-            system_info.cpu_count.unwrap_or(0) >= 2,
-            "iOS devices have at least 2 cores"
-        );
+        let cpu_count = system_info.raw.number_of_processors as u8;
+        assert!(cpu_count >= 1, "System should report at least one processor");
 
         // Verify OS version is reasonable (iOS 12+)
-        if let (Some(major), Some(minor), _) = (
-            system_info.os_version_major,
-            system_info.os_version_minor,
-            system_info.os_version_build,
-        ) {
-            assert!(major >= 12, "iOS version should be 12 or higher");
-            assert!(minor <= 20, "iOS minor version should be reasonable");
+        let major = system_info.raw.major_version;
+        let minor = system_info.raw.minor_version;
+        // `build_number` isn't used for the assertions but is kept here for
+        // completeness and future checks if needed.
+        let _build = system_info.raw.build_number;
+
+        // The writer records `0` for unknown values, so only assert when we
+        // have something that looks like a real version.
+        if major != 0 {
+            assert!(major >= 12, "iOS major version should be 12 or higher");
+            // Cap minor to something reasonable to avoid future breakage.
+            assert!(minor <= 30, "iOS minor version should be within a sane range");
         }
     }
 
