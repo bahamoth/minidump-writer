@@ -1658,7 +1658,7 @@ mod macos_tests {
         // On ARM64, verify the state has proper size
         assert_eq!(
             state.state_size,
-            mach::ARM_THREAD_STATE64_COUNT,
+            minidump_writer::apple::common::mach::ARM_THREAD_STATE64_COUNT,
             "Thread state should have correct size"
         );
     }

@@ -65,8 +65,8 @@ impl MinidumpWriter {
     /// location if successful
     fn write_thread_name(
         buffer: &mut DumpBuf,
-        dumper: &TaskDumper,
-        tid: u32,
+        _dumper: &TaskDumper,
+        _tid: u32,
     ) -> Result<MDLocationDescriptor, super::super::WriterError> {
         // On iOS, we need to use thread_info with THREAD_EXTENDED_INFO flavor
         // However, this is not always available, so we fall back to empty name
