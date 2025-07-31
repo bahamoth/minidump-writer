@@ -3,8 +3,8 @@ use crate::{
     dir_section::{DirSection, DumpBuf},
     mem_writer::*,
     minidump_format::{
-        format::{MD_HEADER_SIGNATURE, MD_HEADER_VERSION},
-        MDLocationDescriptor, MDMemoryDescriptor, MDRawDirectory, MDRawHeader,
+        MDLocationDescriptor, MDMemoryDescriptor, MDRawDirectory, MDRawHeader, MD_HEADER_SIGNATURE,
+        MD_HEADER_VERSION,
     },
 };
 use std::io::{Seek, Write};
