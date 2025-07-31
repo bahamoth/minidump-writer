@@ -1051,7 +1051,6 @@ mod macos_tests {
 
     #[test]
     fn test_breakpad_info_with_crash_context() {
-        let mut writer = MinidumpWriter::new();
         let task = unsafe { mach2::traps::mach_task_self() };
         let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
 
@@ -1069,7 +1068,7 @@ mod macos_tests {
         };
 
         // Set the crash context on the writer
-        writer = MinidumpWriter::with_crash_context(crash_context);
+        let mut writer = MinidumpWriter::with_crash_context(crash_context);
 
         let mut cursor = Cursor::new(Vec::new());
 
@@ -1722,5 +1721,271 @@ mod macos_tests {
             // The presence of a name is tested on macOS, and the logic is shared.
             let _ = name_rva;
         }
+    }
+
+    #[test]
+    fn test_breakpad_info_different_handler_thread() {
+        // Test the critical case discovered today: when handler_thread is different from crash thread
+        let task = unsafe { mach2::traps::mach_task_self() };
+        let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
+
+        // Create crash context with DIFFERENT handler thread (0 means no handler thread)
+        let crash_context = IosCrashContext {
+            task,
+            thread: current_thread,
+            handler_thread: 0, // Different from crash thread - this is the fix we discovered
+            exception: Some(IosExceptionInfo {
+                kind: 1,  // EXC_BAD_ACCESS
+                code: 11, // SIGSEGV
+                subcode: Some(0xdeadbeef),
+            }),
+            thread_state: minidump_writer::apple::common::mach::ThreadState::default(),
+        };
+
+        let mut writer = MinidumpWriter::with_crash_context(crash_context);
+        let mut cursor = Cursor::new(Vec::new());
+
+        let result = writer.dump(&mut cursor);
+        assert!(result.is_ok());
+
+        let bytes = cursor.into_inner();
+
+        // Parse with minidump crate
+        let md = Minidump::read(bytes).expect("Failed to parse minidump");
+
+        // Verify BreakpadInfo has correct values
+        let breakpad_info: MinidumpBreakpadInfo = md
+            .get_stream()
+            .expect("BreakpadInfoStream should be present");
+
+        assert_eq!(breakpad_info.dump_thread_id, Some(0));
+        assert_eq!(breakpad_info.requesting_thread_id, Some(current_thread));
+
+        // This configuration should allow minidump-stackwalk to show thread info properly
+        let thread_list: MinidumpThreadList =
+            md.get_stream().expect("ThreadList should be present");
+        assert!(!thread_list.threads.is_empty());
+    }
+
+    #[test]
+    fn test_exception_stream_has_independent_context() {
+        // Test that ExceptionStream creates its own thread context
+        let task = unsafe { mach2::traps::mach_task_self() };
+        let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
+
+        let crash_context = IosCrashContext {
+            task,
+            thread: current_thread,
+            handler_thread: 0,
+            exception: Some(IosExceptionInfo {
+                kind: 1,
+                code: 11,
+                subcode: Some(0xdeadbeef),
+            }),
+            thread_state: minidump_writer::apple::common::mach::ThreadState::default(),
+        };
+
+        let mut writer = MinidumpWriter::with_crash_context(crash_context);
+        let mut cursor = Cursor::new(Vec::new());
+
+        writer.dump(&mut cursor).expect("Failed to dump");
+        let bytes = cursor.into_inner();
+
+        // Parse header
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+
+        // Find both ThreadListStream and ExceptionStream
+        let mut thread_list_offset = None;
+        let mut exception_offset = None;
+
+        for i in 0..header.stream_count {
+            let dir_entry_offset = header.stream_directory_rva as usize
+                + (i as usize * std::mem::size_of::<MDRawDirectory>());
+            let dir_entry: MDRawDirectory = bytes
+                .pread(dir_entry_offset)
+                .expect("Failed to parse directory entry");
+
+            match dir_entry.stream_type {
+                3 => thread_list_offset = Some(dir_entry.location.rva as usize), // ThreadListStream
+                6 => exception_offset = Some(dir_entry.location.rva as usize),   // ExceptionStream
+                _ => {}
+            }
+        }
+
+        assert!(thread_list_offset.is_some());
+        assert!(exception_offset.is_some());
+
+        // Get thread context from ThreadListStream
+        let thread_offset = thread_list_offset.unwrap();
+        let _thread_count: u32 = bytes
+            .pread(thread_offset)
+            .expect("Failed to parse thread count");
+        let first_thread: MDRawThread = bytes
+            .pread(thread_offset + 4)
+            .expect("Failed to parse first thread");
+
+        // Get exception stream
+        let exc_offset = exception_offset.unwrap();
+        let _exc_thread_id: u32 = bytes
+            .pread(exc_offset)
+            .expect("Failed to parse exception thread ID");
+        let _padding: u32 = bytes
+            .pread(exc_offset + 4)
+            .expect("Failed to parse padding");
+        let _exception: MDException = bytes
+            .pread(exc_offset + 8)
+            .expect("Failed to parse exception");
+        let exc_context_location: MDLocationDescriptor = bytes
+            .pread(exc_offset + 8 + std::mem::size_of::<MDException>())
+            .expect("Failed to parse exception context location");
+
+        // Verify ExceptionStream has its own context (different RVA)
+        assert!(exc_context_location.rva > 0);
+        assert!(exc_context_location.data_size > 0);
+
+        // Exception context should be at a different location than thread list context
+        // This ensures ExceptionStream is independent
+        assert_ne!(
+            exc_context_location.rva, first_thread.thread_context.rva,
+            "ExceptionStream should have independent thread context"
+        );
+    }
+
+    #[test]
+    fn test_stream_ordering_exception_last() {
+        // Test that ExceptionStream appears last in the stream list when present
+        let task = unsafe { mach2::traps::mach_task_self() };
+        let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
+
+        let crash_context = IosCrashContext {
+            task,
+            thread: current_thread,
+            handler_thread: 0,
+            exception: Some(IosExceptionInfo {
+                kind: 1,
+                code: 11,
+                subcode: Some(0xdeadbeef),
+            }),
+            thread_state: minidump_writer::apple::common::mach::ThreadState::default(),
+        };
+
+        let mut writer = MinidumpWriter::with_crash_context(crash_context);
+        let mut cursor = Cursor::new(Vec::new());
+
+        writer.dump(&mut cursor).expect("Failed to dump");
+        let bytes = cursor.into_inner();
+
+        // Parse header
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+
+        // Collect stream types in order
+        let mut stream_types = Vec::new();
+        for i in 0..header.stream_count {
+            let dir_entry_offset = header.stream_directory_rva as usize
+                + (i as usize * std::mem::size_of::<MDRawDirectory>());
+            let dir_entry: MDRawDirectory = bytes
+                .pread(dir_entry_offset)
+                .expect("Failed to parse directory entry");
+
+            stream_types.push(dir_entry.stream_type);
+        }
+
+        // Find ExceptionStream position
+        let exception_pos = stream_types
+            .iter()
+            .position(|&t| t == MDStreamType::ExceptionStream as u32);
+
+        assert!(exception_pos.is_some(), "ExceptionStream should be present");
+
+        // ExceptionStream should be the last stream
+        assert_eq!(
+            exception_pos.unwrap(),
+            stream_types.len() - 1,
+            "ExceptionStream should be the last stream"
+        );
+    }
+
+    #[test]
+    fn test_memory_list_with_invalid_addresses() {
+        // Test handling of invalid memory addresses
+        let mut writer = MinidumpWriter::new();
+        let mut cursor = Cursor::new(Vec::new());
+
+        let result = writer.dump(&mut cursor);
+        assert!(result.is_ok());
+
+        let bytes = cursor.into_inner();
+        let md = Minidump::read(bytes).expect("Failed to parse minidump");
+
+        let memory_list: MinidumpMemoryList =
+            md.get_stream().expect("MemoryList should be present");
+        let thread_list: MinidumpThreadList =
+            md.get_stream().expect("ThreadList should be present");
+
+        // Check that threads with invalid stack pointers are handled
+        for thread in &thread_list.threads {
+            let stack_start = thread.raw.stack.start_of_memory_range;
+
+            // Check for sentinel values
+            if stack_start == minidump_writer::apple::ios::streams::thread_list::STACK_POINTER_NULL
+                || stack_start
+                    == minidump_writer::apple::ios::streams::thread_list::STACK_READ_FAILED
+            {
+                // Should have sentinel-sized memory (16 bytes)
+                assert_eq!(thread.raw.stack.memory.data_size, 16);
+
+                // Should not have actual memory in the memory list for sentinel addresses
+                let has_memory = memory_list.iter().any(|m| m.base_address == stack_start);
+
+                assert!(
+                    !has_memory,
+                    "Sentinel addresses should not have real memory regions"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_thread_state_capture_failures() {
+        // Test handling when thread state capture fails
+        let task = unsafe { mach2::traps::mach_task_self() };
+        let dumper = TaskDumper::new(task).unwrap();
+
+        // Try to read state for an invalid thread ID
+        let invalid_thread = 0xDEADBEEF;
+        let result = dumper.read_thread_state(invalid_thread);
+
+        assert!(result.is_err(), "Reading invalid thread should fail");
+    }
+
+    #[test]
+    fn test_crash_context_with_no_exception() {
+        // Test crash context without exception info
+        let task = unsafe { mach2::traps::mach_task_self() };
+        let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
+
+        let crash_context = IosCrashContext {
+            task,
+            thread: current_thread,
+            handler_thread: 0,
+            exception: None, // No exception info
+            thread_state: minidump_writer::apple::common::mach::ThreadState::default(),
+        };
+
+        let mut writer = MinidumpWriter::with_crash_context(crash_context);
+        let mut cursor = Cursor::new(Vec::new());
+
+        writer.dump(&mut cursor).expect("Failed to dump");
+        let bytes = cursor.into_inner();
+
+        let md = Minidump::read(bytes).expect("Failed to parse minidump");
+
+        // Should still have exception stream with default values
+        let exception: minidump::MinidumpException =
+            md.get_stream().expect("Exception stream should be present");
+
+        // Exception record should have default values
+        assert_eq!(exception.raw.exception_record.exception_code, 0);
+        assert_eq!(exception.raw.exception_record.exception_address, 0);
     }
 }

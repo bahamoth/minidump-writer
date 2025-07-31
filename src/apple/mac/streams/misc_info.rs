@@ -25,6 +25,6 @@ impl MinidumpWriter {
         buffer: &mut DumpBuf,
         dumper: &TaskDumper,
     ) -> Result<MDRawDirectory, WriterError> {
-        misc_info::write_misc_info(dumper, buffer).map_err(|e| WriterError::MemoryWriterError(e))
+        misc_info::write_misc_info(dumper, buffer).map_err(WriterError::MemoryWriterError)
     }
 }

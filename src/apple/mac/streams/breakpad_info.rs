@@ -23,7 +23,6 @@ impl MinidumpWriter {
         buffer: &mut DumpBuf,
         _dumper: &TaskDumper,
     ) -> Result<MDRawDirectory, WriterError> {
-        breakpad_info::write_breakpad_info(self, buffer)
-            .map_err(|e| WriterError::MemoryWriterError(e))
+        breakpad_info::write_breakpad_info(self, buffer).map_err(WriterError::MemoryWriterError)
     }
 }
