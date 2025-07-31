@@ -91,7 +91,7 @@ impl MinidumpWriter {
                 Box::new(|mw, buffer, dumper| mw.write_thread_names(buffer, dumper)),
             ];
 
-            // Exception stream is added conditionally if we have crash context
+            // Exception stream needs to be the last entry as it may be omitted
             if self.crash_context.is_some() {
                 writers.push(Box::new(|mw, buffer, dumper| {
                     mw.write_exception(buffer, dumper)
