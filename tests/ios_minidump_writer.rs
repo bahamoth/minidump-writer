@@ -1475,7 +1475,10 @@ mod macos_tests {
 
         // Verify processor count
         let cpu_count = system_info.raw.number_of_processors as u8;
-        assert!(cpu_count >= 1, "System should report at least one processor");
+        assert!(
+            cpu_count >= 1,
+            "System should report at least one processor"
+        );
 
         // Verify OS version is reasonable (iOS 12+)
         let major = system_info.raw.major_version;
@@ -1489,7 +1492,10 @@ mod macos_tests {
         if major != 0 {
             assert!(major >= 12, "iOS major version should be 12 or higher");
             // Cap minor to something reasonable to avoid future breakage.
-            assert!(minor <= 30, "iOS minor version should be within a sane range");
+            assert!(
+                minor <= 30,
+                "iOS minor version should be within a sane range"
+            );
         }
     }
 
