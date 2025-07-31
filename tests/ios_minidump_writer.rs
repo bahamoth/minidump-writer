@@ -343,6 +343,8 @@ mod macos_tests {
         MinidumpSystemInfo, MinidumpThreadList, MinidumpThreadNames, Module,
     };
     use minidump_common::format::PlatformId;
+    use minidump_writer::apple::ios::TaskDumper;
+    use minidump_writer::dir_section::DumpBuf;
     use minidump_writer::ios_test::*;
     use minidump_writer::minidump_format::*;
     use scroll::Pread;
@@ -405,63 +407,8 @@ mod macos_tests {
     }
 
     #[test]
-    fn test_system_info_contents() {
-        let mut writer = TestMinidumpWriter::new();
-        let dumper = TaskDumper::new(unsafe { mach2::traps::mach_task_self() }).unwrap();
-        let mut buffer = DumpBuf::with_capacity(0);
-
-        // Write system info
-        let result = writer.test_write_system_info(&mut buffer, &dumper);
-        assert!(result.is_ok());
-
-        // Read back the system info
-        let dirent = result.unwrap();
-        let offset = dirent.location.rva as usize;
-        let bytes: Vec<u8> = buffer.into();
-
-        // Verify buffer contains expected data
-
-        // Verify buffer bounds before unsafe access
-        assert!(
-            offset + std::mem::size_of::<MDRawSystemInfo>() <= bytes.len(),
-            "System info offset {} + size {} exceeds buffer length {}",
-            offset,
-            std::mem::size_of::<MDRawSystemInfo>(),
-            bytes.len()
-        );
-
-        // Use scroll to properly parse the minidump format
-        let sys_info: MDRawSystemInfo = bytes.pread(offset).expect("Failed to parse SystemInfo");
-
-        // System info parsed successfully
-
-        // Let's check field offsets
-        let base = &sys_info as *const _ as usize;
-        let _arch_offset = &sys_info.processor_architecture as *const _ as usize - base;
-        let _platform_offset = &sys_info.platform_id as *const _ as usize - base;
-        // Field offsets calculated
-
-        // Verify iOS platform ID
-        assert_eq!(sys_info.platform_id, PlatformId::Ios as u32);
-
-        // Verify processor architecture
-        let expected_arch = if cfg!(target_arch = "x86_64") {
-            MDCPUArchitecture::PROCESSOR_ARCHITECTURE_AMD64 as u16
-        } else {
-            MDCPUArchitecture::PROCESSOR_ARCHITECTURE_ARM64_OLD as u16
-        };
-        assert_eq!(sys_info.processor_architecture, expected_arch);
-
-        // Verify processor count
-        assert!(sys_info.number_of_processors >= 2); // iOS devices have at least 2 cores
-
-        // Verify OS version
-        assert!(sys_info.major_version >= 12); // iOS 12+
-    }
-
-    #[test]
     fn test_minidump_writer_with_system_info() {
-        let mut writer = TestMinidumpWriter::new();
+        let mut writer = MinidumpWriter::new();
         let mut cursor = Cursor::new(Vec::new());
 
         // Dump to cursor
@@ -505,61 +452,8 @@ mod macos_tests {
     }
 
     #[test]
-    fn test_thread_list_direct() {
-        let mut writer = TestMinidumpWriter::new();
-        let task = unsafe { mach2::traps::mach_task_self() };
-        let dumper = TaskDumper::new(task).unwrap();
-        let mut buffer = DumpBuf::with_capacity(0);
-
-        // Write thread list directly
-        let result = writer.test_write_thread_list(&mut buffer, &dumper);
-        assert!(result.is_ok());
-
-        let (dirent, _) = result.unwrap();
-        let bytes: Vec<u8> = buffer.into();
-
-        // Buffer written successfully
-
-        // Read thread count
-        let offset = dirent.location.rva as usize;
-        let _thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
-        // Thread count parsed
-
-        // Read first thread
-        let thread_offset = offset + 4;
-        if thread_offset + std::mem::size_of::<MDRawThread>() <= bytes.len() {
-            // Use scroll to parse the thread structure
-            let thread: MDRawThread = bytes.pread(thread_offset).expect("Failed to parse thread");
-
-            // Thread fields validated
-
-            // Verify thread has proper data
-            assert!(
-                thread.thread_id > 0 && thread.thread_id < 100000,
-                "Invalid thread ID: {}",
-                thread.thread_id
-            );
-            assert!(
-                thread.stack.memory.data_size > 0
-                    || thread.stack.start_of_memory_range
-                        == minidump_writer::apple::ios::streams::thread_list::STACK_POINTER_NULL
-                    || thread.stack.start_of_memory_range
-                        == minidump_writer::apple::ios::streams::thread_list::STACK_READ_FAILED,
-                "Stack size should be > 0"
-            );
-            if thread.stack.start_of_memory_range
-                != minidump_writer::apple::ios::streams::thread_list::STACK_POINTER_NULL
-                && thread.stack.start_of_memory_range
-                    != minidump_writer::apple::ios::streams::thread_list::STACK_READ_FAILED
-            {
-                assert!(thread.stack.memory.rva > 0, "Stack RVA should be > 0");
-            }
-        }
-    }
-
-    #[test]
     fn test_thread_list_stream() {
-        let mut writer = TestMinidumpWriter::new();
+        let mut writer = MinidumpWriter::new();
         let mut cursor = Cursor::new(Vec::new());
 
         // Dump full minidump to get proper thread list
@@ -728,56 +622,6 @@ mod macos_tests {
     }
 
     #[test]
-    fn test_stack_overflow_handling() {
-        let mut writer = TestMinidumpWriter::new();
-        let task = unsafe { mach2::traps::mach_task_self() };
-        let dumper = TaskDumper::new(task).unwrap();
-        let mut buffer = DumpBuf::with_capacity(0);
-
-        // We can't easily simulate a real stack overflow, but we can test
-        // the handling logic by checking that the sentinel values are properly used
-        let result = writer.test_write_thread_list(&mut buffer, &dumper);
-        assert!(result.is_ok());
-
-        let (dirent, _) = result.unwrap();
-        let bytes: Vec<u8> = buffer.into();
-        let offset = dirent.location.rva as usize + 4; // Skip thread count
-
-        // Check if any threads have the sentinel values
-        let thread_count: u32 = bytes
-            .pread(dirent.location.rva as usize)
-            .expect("Failed to parse thread count");
-
-        let thread_size = std::mem::size_of::<MDRawThread>();
-        let mut _found_sentinel = false;
-
-        for i in 0..thread_count as usize {
-            let thread_offset = offset + (i * thread_size);
-            let thread: MDRawThread = bytes
-                .pread(thread_offset)
-                .expect(&format!("Failed to parse thread {}", i));
-
-            // Check for sentinel values
-            if thread.stack.start_of_memory_range
-                == minidump_writer::apple::ios::streams::thread_list::STACK_POINTER_NULL
-            {
-                // Stack pointer was null
-                assert_eq!(thread.stack.memory.data_size, 16);
-                _found_sentinel = true;
-            } else if thread.stack.start_of_memory_range
-                == minidump_writer::apple::ios::streams::thread_list::STACK_READ_FAILED
-            {
-                // Stack read failed
-                assert_eq!(thread.stack.memory.data_size, 16);
-                _found_sentinel = true;
-            }
-        }
-
-        // Note: In normal execution, we might not see sentinel values
-        // This test primarily ensures the code paths compile and don't panic
-    }
-
-    #[test]
     fn test_fragmented_stack_regions() {
         // This test verifies that calculate_stack_size handles fragmented stacks
         // In practice, this is difficult to simulate without low-level memory manipulation
@@ -807,138 +651,6 @@ mod macos_tests {
                 "Stack region should be readable"
             );
         }
-    }
-
-    #[test]
-    fn test_crashed_thread_with_context() {
-        let mut writer = TestMinidumpWriter::new();
-        let task = unsafe { mach2::traps::mach_task_self() };
-        let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
-
-        // Create a mock crash context
-        let crash_context = IosCrashContext {
-            task,
-            thread: current_thread,
-            handler_thread: current_thread,
-            exception: Some(IosExceptionInfo {
-                kind: 1, // EXC_BAD_ACCESS
-                code: 1, // KERN_INVALID_ADDRESS
-                subcode: Some(0x1234),
-            }),
-            thread_state: minidump_writer::apple::common::mach::ThreadState::default(),
-        };
-
-        // Set the crash context on the writer
-        writer = TestMinidumpWriter::with_crash_context(crash_context);
-
-        let dumper = TaskDumper::new(task).unwrap();
-        let mut buffer = DumpBuf::with_capacity(0);
-
-        // Write thread list with crash context
-        let result = writer.test_write_thread_list(&mut buffer, &dumper);
-        assert!(result.is_ok());
-
-        let (_dirent, crashed_thread_context) = result.unwrap();
-
-        // Verify we got a crashed thread context
-        assert!(
-            crashed_thread_context.is_some(),
-            "Should have crashed thread context"
-        );
-
-        // Verify the crashed thread has valid context
-        let ctx = crashed_thread_context.unwrap();
-        assert!(ctx.rva > 0);
-        assert!(ctx.data_size > 0);
-    }
-
-    #[test]
-    fn test_memory_list_stream() {
-        let mut writer = TestMinidumpWriter::new();
-        let task = unsafe { mach2::traps::mach_task_self() };
-        let dumper = TaskDumper::new(task).unwrap();
-        let mut buffer = DumpBuf::with_capacity(0);
-
-        // First write thread list to populate memory_blocks
-        let result = writer.test_write_thread_list(&mut buffer, &dumper);
-        assert!(result.is_ok());
-
-        // Verify we have some memory blocks from thread stacks
-        // Can't access private field in tests
-        // assert!(
-        //     !writer.memory_blocks.is_empty(),
-        //     "Should have collected thread stack memory"
-        // );
-        // Can't access private field in tests
-        // let initial_blocks = writer.memory_blocks.len();
-        let initial_blocks = 1; // Assume at least one block
-
-        // Now write memory list
-        let memory_result = writer.test_write_memory_list(&mut buffer, &dumper);
-        assert!(memory_result.is_ok());
-
-        let dirent = memory_result.unwrap();
-        assert_eq!(dirent.stream_type, MDStreamType::MemoryListStream as u32);
-        assert!(dirent.location.data_size > 0);
-
-        // Verify the stream structure
-        let bytes: Vec<u8> = buffer.into();
-        let offset = dirent.location.rva as usize;
-
-        // Read the memory block count
-        let block_count: u32 = bytes
-            .pread(offset)
-            .expect("Failed to parse memory block count");
-
-        // Should have at least the thread stacks
-        assert!(
-            block_count >= initial_blocks as u32,
-            "Memory list should contain at least {} blocks",
-            initial_blocks
-        );
-    }
-
-    #[test]
-    fn test_memory_list_with_exception() {
-        let mut writer = TestMinidumpWriter::new();
-        let task = unsafe { mach2::traps::mach_task_self() };
-        let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
-
-        // Get current thread state for realistic crash context
-        let dumper = TaskDumper::new(task).unwrap();
-        let thread_state = dumper.read_thread_state(current_thread).unwrap();
-
-        // Create crash context with exception
-        let crash_context = IosCrashContext {
-            task,
-            thread: current_thread,
-            handler_thread: current_thread,
-            exception: Some(IosExceptionInfo {
-                kind: 1, // EXC_BAD_ACCESS
-                code: 1, // KERN_INVALID_ADDRESS
-                subcode: Some(0x1234),
-            }),
-            thread_state,
-        };
-
-        // Set the crash context on the writer
-        writer = TestMinidumpWriter::with_crash_context(crash_context);
-
-        let mut buffer = DumpBuf::with_capacity(0);
-
-        // Write thread list first
-        writer.test_write_thread_list(&mut buffer, &dumper).unwrap();
-        // Can't access private field in tests
-        // let blocks_before = writer.memory_blocks.len();
-
-        // Write memory list - should include IP memory for exception
-        let result = writer.test_write_memory_list(&mut buffer, &dumper);
-        assert!(result.is_ok());
-
-        // With an exception, we might have added memory around the IP
-        // (though it's not guaranteed if the IP region is inaccessible)
-        // Can't verify memory blocks in external tests
-        // assert!(writer.memory_blocks.len() >= blocks_before);
     }
 
     #[test]
@@ -1097,7 +809,7 @@ mod macos_tests {
 
     #[test]
     fn test_module_list_stream() {
-        let mut writer = TestMinidumpWriter::new();
+        let mut writer = MinidumpWriter::new();
         let mut cursor = Cursor::new(Vec::new());
 
         // Dump full minidump to get module list
@@ -1178,7 +890,7 @@ mod macos_tests {
 
     #[test]
     fn test_thread_register_capture() {
-        let mut writer = TestMinidumpWriter::new();
+        let mut writer = MinidumpWriter::new();
         let mut cursor = Cursor::new(Vec::new());
 
         // Dump full minidump
@@ -1253,7 +965,7 @@ mod macos_tests {
 
     #[test]
     fn test_breakpad_info_stream() {
-        let mut writer = TestMinidumpWriter::new();
+        let mut writer = MinidumpWriter::new();
         let mut cursor = Cursor::new(Vec::new());
 
         // Dump full minidump
@@ -1275,7 +987,7 @@ mod macos_tests {
 
     #[test]
     fn test_thread_names_stream() {
-        let mut writer = TestMinidumpWriter::new();
+        let mut writer = MinidumpWriter::new();
         let mut cursor = Cursor::new(Vec::new());
 
         // Dump full minidump
@@ -1312,7 +1024,7 @@ mod macos_tests {
 
     #[test]
     fn test_misc_info_stream() {
-        let mut writer = TestMinidumpWriter::new();
+        let mut writer = MinidumpWriter::new();
         let mut cursor = Cursor::new(Vec::new());
 
         // Dump full minidump
@@ -1341,7 +1053,7 @@ mod macos_tests {
 
     #[test]
     fn test_breakpad_info_with_crash_context() {
-        let mut writer = TestMinidumpWriter::new();
+        let mut writer = MinidumpWriter::new();
         let task = unsafe { mach2::traps::mach_task_self() };
         let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
 
@@ -1359,7 +1071,7 @@ mod macos_tests {
         };
 
         // Set the crash context on the writer
-        writer = TestMinidumpWriter::with_crash_context(crash_context);
+        writer = MinidumpWriter::with_crash_context(crash_context);
 
         let mut cursor = Cursor::new(Vec::new());
 
@@ -1424,7 +1136,7 @@ mod macos_tests {
 
     #[test]
     fn test_stream_count_with_new_streams() {
-        let mut writer = TestMinidumpWriter::new();
+        let mut writer = MinidumpWriter::new();
         let mut cursor = Cursor::new(Vec::new());
 
         // Dump full minidump without exception
@@ -1468,7 +1180,7 @@ mod macos_tests {
     #[test]
     fn test_module_base_address_calculation() {
         // Test for fix in commit a743db0c: module base address should be (vm_addr + slide)
-        let mut writer = TestMinidumpWriter::new();
+        let mut writer = MinidumpWriter::new();
         let mut cursor = Cursor::new(Vec::new());
 
         // Dump full minidump
@@ -1600,7 +1312,7 @@ mod macos_tests {
     #[test]
     fn test_thread_register_values_in_minidump() {
         // Test that thread register values are properly captured in minidump
-        let mut writer = TestMinidumpWriter::new();
+        let mut writer = MinidumpWriter::new();
         let mut cursor = Cursor::new(Vec::new());
 
         // Dump full minidump
@@ -1742,5 +1454,264 @@ mod macos_tests {
         }
 
         assert!(found_test_binary, "Test binary must be in module list");
+    }
+
+    #[test]
+    fn test_system_info_detailed_contents() {
+        // Test detailed system info contents that were previously tested in unit tests
+        let bytes = dump_here().expect("Failed to create minidump");
+
+        let md = Minidump::read(bytes).expect("Failed to parse minidump");
+        let system_info: MinidumpSystemInfo =
+            md.get_stream().expect("SystemInfo should be present");
+
+        // Verify OS information
+        assert_eq!(system_info.os, minidump::system_info::Os::Ios);
+
+        // Verify CPU architecture
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(system_info.cpu, minidump::system_info::Cpu::Arm64);
+
+        #[cfg(target_arch = "x86_64")]
+        assert_eq!(system_info.cpu, minidump::system_info::Cpu::X86_64);
+
+        // Verify processor count
+        assert!(
+            system_info.cpu_count.unwrap_or(0) >= 2,
+            "iOS devices have at least 2 cores"
+        );
+
+        // Verify OS version is reasonable (iOS 12+)
+        if let (Some(major), Some(minor), _) = (
+            system_info.os_version_major,
+            system_info.os_version_minor,
+            system_info.os_version_build,
+        ) {
+            assert!(major >= 12, "iOS version should be 12 or higher");
+            assert!(minor <= 20, "iOS minor version should be reasonable");
+        }
+    }
+
+    #[test]
+    fn test_memory_list_with_crash_context() {
+        // Test memory list includes exception address memory when crash context is present
+        let task = unsafe { mach2::traps::mach_task_self() };
+        let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
+
+        // Get current PC to use as fake exception address
+        let dumper = TaskDumper::new(task).unwrap();
+        let thread_state = dumper.read_thread_state(current_thread).unwrap();
+        let exception_address = thread_state.pc();
+
+        // Create crash context with exception
+        let crash_context = IosCrashContext {
+            task,
+            thread: current_thread,
+            handler_thread: current_thread,
+            exception: Some(IosExceptionInfo {
+                kind: 1, // EXC_BAD_ACCESS
+                code: 1, // KERN_INVALID_ADDRESS
+                subcode: Some(exception_address),
+            }),
+            thread_state,
+        };
+
+        let mut writer = MinidumpWriter::with_crash_context(crash_context);
+        let mut cursor = Cursor::new(Vec::new());
+
+        let result = writer.dump(&mut cursor);
+        assert!(result.is_ok());
+
+        let bytes = cursor.into_inner();
+        let md = Minidump::read(bytes).expect("Failed to parse minidump");
+
+        // Get memory list
+        let memory_list: MinidumpMemoryList =
+            md.get_stream().expect("MemoryList should be present");
+
+        // Should have memory regions
+        assert!(
+            !memory_list.iter().collect::<Vec<_>>().is_empty(),
+            "Should have memory regions"
+        );
+
+        // Check if any memory region contains the exception address
+        let mut found_exception_memory = false;
+        for mem in memory_list.iter() {
+            let start = mem.base_address;
+            let end = start + mem.size;
+
+            if start <= exception_address && exception_address < end {
+                found_exception_memory = true;
+                // Verify the memory region is reasonable size (around instruction pointer)
+                assert!(
+                    mem.size >= 256,
+                    "Memory around exception should be at least 256 bytes"
+                );
+                assert!(
+                    mem.size <= 4096,
+                    "Memory around exception should not be too large"
+                );
+                break;
+            }
+        }
+
+        assert!(
+            found_exception_memory,
+            "Memory list should include memory around exception address"
+        );
+    }
+
+    #[test]
+    fn test_stack_sentinel_handling() {
+        // Test stack overflow sentinel handling
+        let bytes = dump_here().expect("Failed to create minidump");
+
+        let md = Minidump::read(bytes).expect("Failed to parse minidump");
+        let thread_list: MinidumpThreadList =
+            md.get_stream().expect("ThreadList should be present");
+
+        // Check thread stack handling
+        for thread in thread_list.threads {
+            let stack_start = thread.raw.stack.start_of_memory_range;
+            let stack_size = thread.raw.stack.memory.data_size;
+
+            // Check for sentinel values
+            if stack_start == minidump_writer::apple::ios::streams::thread_list::STACK_POINTER_NULL
+                || stack_start
+                    == minidump_writer::apple::ios::streams::thread_list::STACK_READ_FAILED
+            {
+                // Sentinel stacks should have minimal size (16 bytes)
+                assert_eq!(stack_size, 16, "Sentinel stacks should be 16 bytes");
+            } else if stack_size > 0 {
+                // Valid stacks should have reasonable size
+                assert!(
+                    stack_size >= 512,
+                    "Valid stack should be at least 512 bytes"
+                );
+                assert!(stack_size <= 1024 * 1024, "Stack should not exceed 1MB");
+            }
+        }
+    }
+
+    #[test]
+    fn test_exception_stream_contents() {
+        // Test exception stream detailed contents
+        let task = unsafe { mach2::traps::mach_task_self() };
+        let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
+
+        let crash_context = IosCrashContext {
+            task,
+            thread: current_thread,
+            handler_thread: current_thread,
+            exception: Some(IosExceptionInfo {
+                kind: 6, // EXC_BREAKPOINT
+                code: 1, // EXC_ARM_BREAKPOINT
+                subcode: Some(0xdeadbeef),
+            }),
+            thread_state: minidump_writer::apple::common::mach::ThreadState::default(),
+        };
+
+        let mut writer = MinidumpWriter::with_crash_context(crash_context);
+        let mut cursor = Cursor::new(Vec::new());
+
+        let result = writer.dump(&mut cursor);
+        assert!(result.is_ok());
+
+        let bytes = cursor.into_inner();
+
+        // Parse header to find exception stream
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+
+        let mut exception_stream_offset = None;
+        for i in 0..header.stream_count {
+            let dir_entry_offset = header.stream_directory_rva as usize
+                + (i as usize * std::mem::size_of::<MDRawDirectory>());
+            let dir_entry: MDRawDirectory = bytes
+                .pread(dir_entry_offset)
+                .expect("Failed to parse directory entry");
+
+            if dir_entry.stream_type == MDStreamType::ExceptionStream as u32 {
+                exception_stream_offset = Some(dir_entry.location.rva as usize);
+                break;
+            }
+        }
+
+        assert!(
+            exception_stream_offset.is_some(),
+            "Exception stream should be present"
+        );
+        let offset = exception_stream_offset.unwrap();
+
+        // Read exception stream
+        let thread_id: u32 = bytes.pread(offset).expect("Failed to parse thread ID");
+        let _padding: u32 = bytes.pread(offset + 4).expect("Failed to parse padding");
+        let exception: MDException = bytes.pread(offset + 8).expect("Failed to parse exception");
+        let context_location: MDLocationDescriptor = bytes
+            .pread(offset + 8 + std::mem::size_of::<MDException>())
+            .expect("Failed to parse context location");
+
+        // Verify exception details
+        assert_eq!(thread_id, current_thread);
+        assert_eq!(exception.exception_code, 6); // EXC_BREAKPOINT
+        assert_eq!(exception.exception_flags, 1); // EXC_ARM_BREAKPOINT
+        assert_eq!(exception.exception_address, 0xdeadbeef);
+
+        // Verify context is present
+        assert!(context_location.rva > 0);
+        assert!(context_location.data_size > 0);
+    }
+
+    #[test]
+    fn test_thread_names_stream_contents() {
+        // Test thread names stream detailed contents
+        let bytes = dump_here().expect("Failed to create minidump");
+
+        // Parse header to find thread names stream
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+
+        let mut thread_names_offset = None;
+        for i in 0..header.stream_count {
+            let dir_entry_offset = header.stream_directory_rva as usize
+                + (i as usize * std::mem::size_of::<MDRawDirectory>());
+            let dir_entry: MDRawDirectory = bytes
+                .pread(dir_entry_offset)
+                .expect("Failed to parse directory entry");
+
+            if dir_entry.stream_type == MDStreamType::ThreadNamesStream as u32 {
+                thread_names_offset = Some(dir_entry.location.rva as usize);
+                break;
+            }
+        }
+
+        assert!(
+            thread_names_offset.is_some(),
+            "Thread names stream should be present"
+        );
+        let offset = thread_names_offset.unwrap();
+
+        // Read thread names count
+        let thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
+        assert!(
+            thread_count > 0,
+            "Should have at least one thread name entry"
+        );
+
+        // Verify thread name entries structure
+        let entries_offset = offset + 4;
+        for i in 0..thread_count as usize {
+            let entry_offset = entries_offset + (i * 12); // Each entry is 12 bytes
+
+            let thread_id: u32 = bytes
+                .pread(entry_offset)
+                .expect("Failed to parse thread ID");
+            let name_rva: u64 = bytes
+                .pread(entry_offset + 4)
+                .expect("Failed to parse name RVA");
+
+            assert!(thread_id > 0, "Thread ID should be valid");
+            // On iOS, thread names are empty, so RVA is 0
+            assert_eq!(name_rva, 0, "iOS thread names should be empty");
+        }
     }
 }
