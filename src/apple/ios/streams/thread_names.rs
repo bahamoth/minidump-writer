@@ -79,6 +79,9 @@ impl MinidumpWriter {
         // name” and “the name is an empty string”.  Down-stream code such as
         // Mozilla’s `minidump-stackwalk` already relies on this semantics.
 
-        Ok(MDLocationDescriptor { rva: 0, data_size: 0 })
+        Ok(MDLocationDescriptor {
+            rva: 0,
+            data_size: 0,
+        })
     }
 }
