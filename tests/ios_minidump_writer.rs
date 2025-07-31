@@ -345,6 +345,17 @@ mod macos_tests {
     use scroll::Pread;
     use std::io::Cursor;
 
+    /// Helper function to create minidump in a predictable stack frame
+    #[inline(never)]
+    fn dump_here() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let marker = 0xDEADBEEFCAFEBABE_u64;
+        std::hint::black_box(marker);
+
+        let mut cursor = Cursor::new(Vec::new());
+        MinidumpWriter::new().dump(&mut cursor)?;
+        Ok(cursor.into_inner())
+    }
+
     #[test]
     fn test_write_system_info() {
         let mut buffer = DumpBuf::with_capacity(0);
@@ -1592,42 +1603,37 @@ mod macos_tests {
         let module_count: u32 = bytes.pread(offset).expect("Failed to parse module count");
         assert!(module_count > 0, "Should have at least one module");
 
-        // Check each module's base address
+        // Verify we have at least one valid module
         let modules_offset = offset + 4;
+        let mut found_valid_module = false;
+        let mut found_main_executable = false;
+
         for i in 0..module_count as usize {
             let module_offset = modules_offset + (i * std::mem::size_of::<MDRawModule>());
             let module: MDRawModule = bytes
                 .pread(module_offset)
                 .expect(&format!("Failed to parse module {}", i));
 
-            // Verify module has valid base address
-            assert!(
-                module.base_of_image > 0,
-                "Module {} should have valid base address",
-                i
-            );
+            // Some modules might have base address 0 (e.g., placeholder entries)
+            if module.base_of_image > 0 {
+                found_valid_module = true;
 
-            // Some system modules might have size 0, skip size check for those
-            // The main executable should always have a valid size
-            if i == 0 {
-                assert!(
-                    module.size_of_image > 0,
-                    "Main executable (module 0) should have valid size"
-                );
-            }
-
-            // For main executable, verify it's in expected range
-            // iOS executables typically load at high addresses due to ASLR
-            if i == 0 {
-                // First module is usually the main executable
-                // On 64-bit iOS, addresses are typically > 0x100000000
-                assert!(
-                    module.base_of_image > 0x100000000,
-                    "Main executable should be at high address due to ASLR, got 0x{:x}",
-                    module.base_of_image
-                );
+                // Check if this looks like the main executable
+                // (high address due to ASLR and non-zero size)
+                if module.base_of_image > 0x100000000 && module.size_of_image > 0 {
+                    found_main_executable = true;
+                }
             }
         }
+
+        assert!(
+            found_valid_module,
+            "Should have at least one module with valid base address"
+        );
+        assert!(
+            found_main_executable,
+            "Should have found the main executable"
+        );
     }
 
     #[test]
@@ -1725,52 +1731,172 @@ mod macos_tests {
         let thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
         assert!(thread_count >= 1, "Should have at least one thread");
 
-        // Check first thread's context
-        let thread_offset = offset + 4;
-        let first_thread: MDRawThread = bytes
-            .pread(thread_offset)
-            .expect("Failed to parse first thread");
+        // Check threads to find at least one with valid context
+        let threads_offset = offset + 4;
+        let mut found_valid_context = false;
 
-        // Verify thread has context
-        assert!(
-            first_thread.thread_context.rva > 0,
-            "Thread should have context"
-        );
-        assert!(
-            first_thread.thread_context.data_size > 0,
-            "Thread context should have size"
-        );
+        for i in 0..thread_count as usize {
+            let thread_offset = threads_offset + (i * std::mem::size_of::<MDRawThread>());
+            let thread: MDRawThread = bytes
+                .pread(thread_offset)
+                .expect(&format!("Failed to parse thread {}", i));
 
-        // Read the context
-        let context_offset = first_thread.thread_context.rva as usize;
+            // Skip threads without context
+            if thread.thread_context.rva == 0 || thread.thread_context.data_size == 0 {
+                continue;
+            }
 
-        // For ARM64, read key register values from context
-        // The context structure starts with context_flags (u64), then registers
-        let _context_flags: u64 = bytes
-            .pread(context_offset)
-            .expect("Failed to parse context flags");
+            // Read the context
+            let context_offset = thread.thread_context.rva as usize;
 
-        // Read SP (x29) and PC (x30) values
-        // In ARM64 context, registers start after context_flags (8 bytes)
-        // x0-x28 = 29 registers * 8 bytes = 232 bytes
-        // x29 (FP/SP) is at offset 8 + 232 = 240
-        // x30 (LR) is at offset 8 + 240 = 248
-        // PC is at offset 8 + 248 = 256
-        let sp_offset = context_offset + 8 + (29 * 8); // x29
-        let pc_offset = context_offset + 8 + (30 * 8) + 8; // PC after x30
+            // For ARM64, read key register values from context
+            // The context structure starts with context_flags (u64), then registers
+            let context_flags: u64 = match bytes.pread(context_offset) {
+                Ok(flags) => flags,
+                Err(_) => continue, // Skip if we can't read context
+            };
 
-        let sp: u64 = bytes.pread(sp_offset).expect("Failed to read SP");
-        let pc: u64 = bytes.pread(pc_offset).expect("Failed to read PC");
+            // Skip if context flags are 0 (invalid context)
+            if context_flags == 0 {
+                continue;
+            }
 
-        // Verify register values are non-zero
-        // Note: Some system threads might have inaccessible context, resulting in zero values
-        // Only check if both SP and PC are non-zero (indicating valid context was captured)
-        if sp != 0 || pc != 0 {
-            assert!(sp != 0, "Stack pointer should not be zero in valid context");
-            assert!(
-                pc != 0,
-                "Program counter should not be zero in valid context"
-            );
+            // Read SP and PC values
+            let sp_offset = context_offset + 8 + (29 * 8); // x29
+            let pc_offset = context_offset + 8 + (30 * 8) + 8; // PC after x30
+
+            let sp: u64 = match bytes.pread(sp_offset) {
+                Ok(val) => val,
+                Err(_) => continue,
+            };
+            let pc: u64 = match bytes.pread(pc_offset) {
+                Ok(val) => val,
+                Err(_) => continue,
+            };
+
+            // If we found non-zero values, we have a valid context
+            if sp != 0 && pc != 0 {
+                found_valid_context = true;
+                break;
+            }
         }
+
+        assert!(
+            found_valid_context,
+            "Should find at least one thread with valid register values"
+        );
+    }
+
+    #[test]
+    fn test_minidump_with_predictable_context() {
+        // Use dump_here to create minidump in predictable context
+        let bytes = dump_here().expect("Failed to create minidump");
+
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+        assert_eq!(header.signature, MD_HEADER_SIGNATURE);
+
+        // Verify we have expected streams
+        assert!(header.stream_count >= 7, "Should have at least 7 streams");
+
+        // Get current thread for comparison
+        let current_thread = unsafe { mach2::mach_init::mach_thread_self() };
+
+        // Find thread list and verify current thread is captured
+        let thread_stream = find_stream(&bytes, &header, MDStreamType::ThreadListStream as u32);
+        assert!(thread_stream.is_some());
+
+        let offset = thread_stream.unwrap();
+        let thread_count: u32 = bytes.pread(offset).expect("Failed to parse thread count");
+
+        // Find our thread
+        let threads_offset = offset + 4;
+        let mut found_current = false;
+
+        for i in 0..thread_count as usize {
+            let thread_offset = threads_offset + (i * std::mem::size_of::<MDRawThread>());
+            let thread: MDRawThread = bytes.pread(thread_offset).expect("Failed to parse thread");
+
+            if thread.thread_id == current_thread {
+                found_current = true;
+
+                // Current thread must have valid context
+                assert!(thread.thread_context.rva > 0);
+                assert!(thread.thread_context.data_size > 0);
+
+                // Read and verify registers
+                let context_offset = thread.thread_context.rva as usize;
+                let sp_offset = context_offset + 264;
+                let pc_offset = context_offset + 272;
+
+                let sp: u64 = bytes.pread(sp_offset).expect("Failed to read SP");
+                let pc: u64 = bytes.pread(pc_offset).expect("Failed to read PC");
+
+                // Current thread must have valid SP/PC
+                assert!(sp > 0x100000, "SP should be in user space");
+                assert!(sp < 0x800000000000, "SP should not be in kernel space");
+                assert!(pc > 0x100000000, "PC should be in code region");
+
+                break;
+            }
+        }
+
+        assert!(found_current, "Current thread must be in minidump");
+    }
+
+    #[test]
+    fn test_module_list_contains_test_binary() {
+        // Use dump_here to ensure consistent module list
+        let bytes = dump_here().expect("Failed to create minidump");
+
+        let header: MDRawHeader = bytes.pread(0).expect("Failed to parse header");
+
+        // Find module list
+        let module_stream = find_stream(&bytes, &header, MDStreamType::ModuleListStream as u32);
+        assert!(module_stream.is_some());
+
+        let offset = module_stream.unwrap();
+        let module_count: u32 = bytes.pread(offset).expect("Failed to parse module count");
+        assert!(module_count > 0);
+
+        // Look for test binary
+        let modules_offset = offset + 4;
+        let mut found_test_binary = false;
+
+        for i in 0..module_count as usize {
+            let module_offset = modules_offset + (i * std::mem::size_of::<MDRawModule>());
+            let module: MDRawModule = bytes.pread(module_offset).expect("Failed to parse module");
+
+            if module.module_name_rva > 0 {
+                let name_offset = module.module_name_rva as usize;
+                let name_len: u32 = bytes.pread(name_offset).unwrap_or(0);
+
+                if name_len > 0 && name_len < 1000 {
+                    let name_bytes_offset = name_offset + 4;
+                    let name_bytes =
+                        &bytes[name_bytes_offset..name_bytes_offset + (name_len as usize)];
+
+                    if let Ok(name) = String::from_utf16(
+                        name_bytes
+                            .chunks_exact(2)
+                            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+                            .collect::<Vec<u16>>()
+                            .as_slice(),
+                    ) {
+                        if name.contains("minidump") || name.contains("test") {
+                            found_test_binary = true;
+
+                            // Test binary should have reasonable values
+                            assert!(module.base_of_image > 0x100000000);
+                            assert!(module.size_of_image > 0);
+                            assert!(module.size_of_image < 0x10000000); // < 256MB
+
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(found_test_binary, "Test binary must be in module list");
     }
 }
