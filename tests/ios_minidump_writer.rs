@@ -340,7 +340,7 @@ mod test {
 mod macos_tests {
     use minidump::{
         Minidump, MinidumpBreakpadInfo, MinidumpMemoryList, MinidumpMiscInfo, MinidumpModuleList,
-        MinidumpSystemInfo, MinidumpThreadList, MinidumpThreadNames,
+        MinidumpSystemInfo, MinidumpThreadList, MinidumpThreadNames, Module,
     };
     use minidump_common::format::PlatformId;
     use minidump_writer::dir_section::DumpBuf;
@@ -1758,7 +1758,11 @@ mod macos_tests {
                 found_current = true;
 
                 // Current thread must have valid context
-                if let Some(ref context) = thread.context {
+                let context = thread
+                    .context(&md.system_info, &md.misc_info)
+                    .expect("Failed to get thread context");
+
+                if let Some(context) = context {
                     // Check that we have valid register values
                     match &context.raw {
                         minidump::MinidumpRawContext::Arm64(ctx) => {
@@ -1790,10 +1794,8 @@ mod macos_tests {
         let module_list: MinidumpModuleList =
             md.get_stream().expect("ModuleList should be present");
 
-        assert!(
-            module_list.module_count() > 0,
-            "Should have at least one module"
-        );
+        let module_count = module_list.iter().count();
+        assert!(module_count > 0, "Should have at least one module");
 
         // Look for test binary
         let mut found_test_binary = false;
