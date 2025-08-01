@@ -1,21 +1,7 @@
-use crate::{
-    apple::{
-        common::streams::misc_info::{self, TaskDumperHelper},
-        ios::{minidump_writer::MinidumpWriter, task_dumper::TaskDumper},
-    },
-    dir_section::DumpBuf,
-    minidump_format::MDRawDirectory,
-};
+use super::*;
+use crate::apple::common::streams::misc_info::MiscInfoStream;
 
-impl TaskDumperHelper for TaskDumper {
-    fn pid_for_task(&self) -> Result<i32, String> {
-        self.pid_for_task().map_err(|e| e.to_string())
-    }
-
-    fn task_info<T: crate::apple::common::mach::TaskInfo>(&self) -> Result<T, String> {
-        self.task_info().map_err(|e| e.to_string())
-    }
-}
+impl MiscInfoStream for MinidumpWriter {}
 
 impl MinidumpWriter {
     /// Writes the [`MDStreamType::MiscInfoStream`] stream.
@@ -28,8 +14,7 @@ impl MinidumpWriter {
         &mut self,
         buffer: &mut DumpBuf,
         dumper: &TaskDumper,
-    ) -> Result<MDRawDirectory, super::super::WriterError> {
-        misc_info::write_misc_info(dumper, buffer)
-            .map_err(|e| super::super::WriterError::MemoryWriterError(e.to_string()))
+    ) -> Result<MDRawDirectory, WriterError> {
+        MiscInfoStream::write_misc_info(self, buffer, dumper).map_err(WriterError::from)
     }
 }

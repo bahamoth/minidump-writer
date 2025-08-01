@@ -2,7 +2,7 @@
 
 use crate::apple::common::mach_call;
 use crate::apple::common::{
-    mach, AllImagesInfo, ImageInfo, TaskDumpError, TaskDumperBase, VMRegionInfo,
+    mach, AllImagesInfo, ImageInfo, TaskDumpError, TaskDumper, VMRegionInfo,
 };
 use mach2::mach_types as mt;
 
@@ -12,7 +12,7 @@ const DYLD_ALL_IMAGE_INFOS_VERSION: u32 = 1;
 /// Thread basic info structure for iOS
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct thread_basic_info {
+pub(crate) struct thread_basic_info {
     pub user_time: libc::time_value_t,
     pub system_time: libc::time_value_t,
     pub cpu_usage: libc::integer_t,
@@ -29,64 +29,13 @@ impl mach::ThreadInfo for thread_basic_info {
     const FLAVOR: u32 = 3;
 }
 
-/// iOS task dumper for reading process information
+/// iOS-specific extensions to TaskDumper
 ///
-/// Due to iOS security restrictions, this can only dump the current process.
-/// Attempting to dump other processes will fail with security errors.
-pub struct TaskDumper {
-    base: TaskDumperBase,
-}
-
+/// Due to iOS security restrictions, attempting to dump other processes
+/// will fail with kernel errors at the system call level.
 impl TaskDumper {
-    pub fn new(task: mt::task_t) -> Result<Self, TaskDumpError> {
-        // On iOS, we can only dump the current task
-        let current_task = unsafe { mach2::traps::mach_task_self() };
-
-        if task != current_task {
-            return Err(TaskDumpError::SecurityRestriction(
-                "iOS only supports dumping the current process".into(),
-            ));
-        }
-
-        Ok(Self {
-            base: TaskDumperBase::new(task),
-        })
-    }
-
-    /// Forward to base implementation
-    pub fn read_task_memory<T>(&self, address: u64, count: usize) -> Result<Vec<T>, TaskDumpError>
-    where
-        T: Sized + Clone,
-    {
-        self.check_current_process()?;
-        self.base.read_task_memory(address, count)
-    }
-
-    /// Forward to base implementation
-    pub fn read_string(
-        &self,
-        addr: u64,
-        expected_size: Option<usize>,
-    ) -> Result<Option<String>, TaskDumpError> {
-        self.check_current_process()?;
-        self.base.read_string(addr, expected_size)
-    }
-
-    /// Forward to base implementation
-    pub fn task_info<T: mach::TaskInfo>(&self) -> Result<T, TaskDumpError> {
-        self.check_current_process()?;
-        self.base.task_info()
-    }
-
-    /// Read the thread list for the task
-    pub fn read_threads(&self) -> Result<&'static [u32], TaskDumpError> {
-        self.check_current_process()?;
-        self.base.read_threads()
-    }
-
     /// Read thread state for the specified thread
     pub fn read_thread_state(&self, tid: u32) -> Result<mach::ThreadState, TaskDumpError> {
-        self.check_current_process()?;
         let mut thread_state = mach::ThreadState::default();
         mach_call!(mach::thread_get_state(
             tid,
@@ -99,7 +48,6 @@ impl TaskDumper {
 
     /// Get thread info for the specified thread
     pub fn thread_info<T: mach::ThreadInfo>(&self, tid: u32) -> Result<T, TaskDumpError> {
-        self.check_current_process()?;
         let mut thread_info = std::mem::MaybeUninit::<T>::uninit();
         let mut count = (std::mem::size_of::<T>() / std::mem::size_of::<u32>()) as u32;
 
@@ -118,8 +66,6 @@ impl TaskDumper {
     /// Can only return PID for the current process. Attempting to get PID
     /// for other tasks will fail with SecurityRestriction error.
     pub fn pid_for_task(&self) -> Result<i32, TaskDumpError> {
-        self.check_current_process()?;
-
         // On iOS, we can only get our own PID
         Ok(unsafe { libc::getpid() })
     }
@@ -133,8 +79,6 @@ impl TaskDumper {
     /// - `dyld_image_load_address`: 0 (not available via dyld API)
     /// - Other fields are populated with available data or safe defaults
     pub fn read_images(&self) -> Result<(AllImagesInfo, Vec<ImageInfo>), TaskDumpError> {
-        self.check_current_process()?;
-
         // Use dyld API which is more reliable on iOS
         let count = unsafe { _dyld_image_count() };
         let mut images = Vec::with_capacity(count as usize);
@@ -195,8 +139,6 @@ impl TaskDumper {
     ///
     /// Returns an error if no executable image (MH_EXECUTE) is found
     pub fn read_executable_image(&self) -> Result<ImageInfo, TaskDumpError> {
-        self.check_current_process()?;
-
         let (_, images) = self.read_images()?;
 
         for img in images {
@@ -226,8 +168,6 @@ impl TaskDumper {
         &self,
         image: &ImageInfo,
     ) -> Result<mach::LoadCommands, TaskDumpError> {
-        self.check_current_process()?;
-
         let header_buf = self.read_task_memory::<mach::MachHeader>(image.load_address, 1)?;
         let header = &header_buf[0];
 
@@ -248,20 +188,8 @@ impl TaskDumper {
         })
     }
 
-    /// Check if we can access the task
-    pub fn can_access_task(&self) -> bool {
-        self.base.task == unsafe { mach2::traps::mach_task_self() }
-    }
-
-    /// Get the task handle
-    pub fn task(&self) -> mt::task_t {
-        self.base.task
-    }
-
     /// Get VM region info for a specific address
     pub fn get_vm_region(&self, addr: u64) -> Result<VMRegionInfo, TaskDumpError> {
-        self.check_current_process()?;
-
         let mut region_base = addr;
         let mut region_size = 0;
         let mut nesting_level = 0;
@@ -270,7 +198,7 @@ impl TaskDumper {
 
         let kr = unsafe {
             mach::mach_vm_region_recurse(
-                self.base.task,
+                self.task,
                 &mut region_base,
                 &mut region_size,
                 &mut nesting_level,
@@ -290,16 +218,6 @@ impl TaskDumper {
             info,
             range: region_base..region_base + region_size,
         })
-    }
-
-    /// Helper to check if we're accessing the current process
-    fn check_current_process(&self) -> Result<(), TaskDumpError> {
-        if !self.can_access_task() {
-            return Err(TaskDumpError::SecurityRestriction(
-                "iOS only supports operations on the current process".into(),
-            ));
-        }
-        Ok(())
     }
 }
 

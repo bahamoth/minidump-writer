@@ -1,74 +1,13 @@
 // macOS-specific TaskDumper implementation
 
 use crate::apple::common::mach_call;
-pub use crate::apple::common::ImageInfo;
-use crate::apple::common::{mach, AllImagesInfo, TaskDumpError, TaskDumperBase, VMRegionInfo};
+use crate::apple::common::{mach, AllImagesInfo, TaskDumpError, VMRegionInfo};
+pub use crate::apple::common::{ImageInfo, TaskDumper};
 use mach2::mach_types as mt;
 
-/// macOS implementation of TaskDumper
+/// macOS-specific extensions to TaskDumper
 /// Unlike iOS, macOS can dump external processes
-pub struct TaskDumper {
-    base: TaskDumperBase,
-}
-
 impl TaskDumper {
-    /// Constructs a [`TaskDumper`] for the specified task
-    pub fn new(task: mt::task_t) -> Self {
-        Self {
-            base: TaskDumperBase::new(task),
-        }
-    }
-
-    /// Get the task handle
-    pub fn task(&self) -> mt::task_t {
-        self.base.task
-    }
-
-    /// Forward to base implementation
-    pub fn read_task_memory<T>(&self, address: u64, count: usize) -> Result<Vec<T>, TaskDumpError>
-    where
-        T: Sized + Clone,
-    {
-        self.base.read_task_memory(address, count)
-    }
-
-    /// Forward to base implementation
-    pub fn read_string(
-        &self,
-        addr: u64,
-        expected_size: Option<usize>,
-    ) -> Result<Option<String>, TaskDumpError> {
-        self.base.read_string(addr, expected_size)
-    }
-
-    /// Forward to base implementation
-    pub fn task_info<T: mach::TaskInfo>(&self) -> Result<T, TaskDumpError> {
-        self.base.task_info()
-    }
-
-    /// Retrieves the list of active threads in the target process
-    ///
-    /// # Errors
-    ///
-    /// The syscall to retrieve the list of threads fails
-    pub fn read_threads(&self) -> Result<&'static [u32], TaskDumpError> {
-        self.base.read_threads()
-    }
-
-    /// Retrieves the mapping between PID and task
-    ///
-    /// # Errors
-    ///
-    /// The syscall to retrieve the mapping fails
-    pub fn pid(&self) -> Result<i32, TaskDumpError> {
-        let mut pid = 0;
-
-        // SAFETY: syscall
-        mach_call!(mach::pid_for_task(self.base.task, &mut pid))?;
-
-        Ok(pid)
-    }
-
     /// Retrieves all of the images loaded in the task
     ///
     /// # Errors
@@ -121,60 +60,6 @@ impl TaskDumper {
         Err(TaskDumpError::NoExecutableImage)
     }
 
-    /// Retrieves all of the VM regions in the task
-    ///
-    /// # Errors
-    ///
-    /// The syscall to retrieve the VM regions fails
-    pub fn read_vm_regions(&self) -> Result<Vec<VMRegionInfo>, TaskDumpError> {
-        let mut regions = Vec::new();
-
-        let mut region_base = 0;
-        let mut region_size = 0;
-        let mut info: mach::vm_region_submap_info_64 = unsafe { std::mem::zeroed() };
-        let mut info_size = std::mem::size_of_val(&info) as u32;
-        let mut nesting_level = 0;
-
-        loop {
-            // SAFETY: syscall
-            let kr = unsafe {
-                mach::mach_vm_region_recurse(
-                    self.base.task,
-                    &mut region_base,
-                    &mut region_size,
-                    &mut nesting_level,
-                    &mut info as *mut _ as *mut i32,
-                    &mut info_size,
-                )
-            };
-
-            if kr != mach::KERN_SUCCESS {
-                if kr == mach::KERN_INVALID_ADDRESS {
-                    // We've reached the end of the tasks VM regions
-                    break;
-                }
-
-                return Err(TaskDumpError::Kernel {
-                    syscall: "mach_vm_region_recurse",
-                    error: kr.into(),
-                });
-            }
-
-            if info.is_submap != 0 {
-                nesting_level += 1;
-            } else {
-                regions.push(VMRegionInfo {
-                    info,
-                    range: region_base..region_base + region_size,
-                });
-
-                region_base += region_size;
-            }
-        }
-
-        Ok(regions)
-    }
-
     /// Retrieves the VM region that contains the specified address
     ///
     /// # Errors
@@ -190,7 +75,7 @@ impl TaskDumper {
 
         let kr = unsafe {
             mach::mach_vm_region_recurse(
-                self.base.task,
+                self.task,
                 &mut region_base,
                 &mut region_size,
                 &mut nesting_level,
@@ -263,6 +148,8 @@ impl TaskDumper {
 
     /// Get PID for the task
     pub fn pid_for_task(&self) -> Result<i32, TaskDumpError> {
-        self.pid()
+        let mut pid = 0;
+        mach_call!(mach::pid_for_task(self.task, &mut pid))?;
+        Ok(pid)
     }
 }

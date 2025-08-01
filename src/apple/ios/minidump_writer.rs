@@ -25,10 +25,10 @@ pub enum WriterError {
     StreamError(#[from] super::streams::StreamError),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("Memory writer error: {0}")]
-    MemoryWriterError(String),
-    #[error("Task dumper error: {0}")]
-    TaskDumperError(String),
+    #[error("Memory writer error")]
+    MemoryWriterError(#[from] crate::mem_writer::MemoryWriterError),
+    #[error("Task dumper error")]
+    TaskDumperError(#[from] crate::apple::common::TaskDumpError),
 }
 
 pub struct MinidumpWriter {

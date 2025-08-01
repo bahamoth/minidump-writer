@@ -8,4 +8,5 @@ mod task_dumper;
 // iOS-specific exports
 pub use crash_context::{IosCrashContext, IosExceptionInfo};
 pub use minidump_writer::{MinidumpWriter, WriterError};
-pub use task_dumper::{thread_basic_info, TaskDumper};
+pub(crate) use task_dumper::thread_basic_info;
+pub use task_dumper::TaskDumper;
