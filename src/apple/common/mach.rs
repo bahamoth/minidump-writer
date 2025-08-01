@@ -203,7 +203,7 @@ impl From<mach2::kern_return::kern_return_t> for KernelError {
 }
 
 // From /usr/include/mach/machine/thread_state.h
-pub const THREAD_STATE_MAX: usize = 1296;
+pub(crate) const THREAD_STATE_MAX: usize = 1296;
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
@@ -357,7 +357,7 @@ impl ThreadState {
 /// Minimal trait that just pairs a structure that can be filled out by
 /// [`mach2::task::task_info`] with the "flavor" that tells it the info we
 /// actually want to retrieve
-pub trait TaskInfo {
+pub(crate) trait TaskInfo {
     /// One of the `MACH_*_TASK` integers. I assume it's very bad if you implement
     /// this trait and provide the wrong flavor for the struct
     const FLAVOR: u32;
@@ -366,7 +366,7 @@ pub trait TaskInfo {
 /// Minimal trait that just pairs a structure that can be filled out by
 /// [`thread_info`] with the "flavor" that tells it the info we
 /// actually want to retrieve
-pub trait ThreadInfo {
+pub(crate) trait ThreadInfo {
     /// One of the `THREAD_*` integers. I assume it's very bad if you implement
     /// this trait and provide the wrong flavor for the struct
     const FLAVOR: u32;
@@ -378,13 +378,13 @@ impl TaskInfo for task_info::task_dyld_info {
 }
 
 /// <usr/include/mach-o/loader.h>, the file type for the main executable image
-pub const MH_EXECUTE: u32 = 0x2;
+pub(crate) const MH_EXECUTE: u32 = 0x2;
 /// <usr/include/mach-o/loader.h>, the file type dyld, the dynamic loader
-pub const MH_DYLINKER: u32 = 0x7;
+pub(crate) const MH_DYLINKER: u32 = 0x7;
 // usr/include/mach-o/loader.h, magic number for MachHeader
-pub const MH_MAGIC_64: u32 = 0xfeedfacf;
+pub(crate) const MH_MAGIC_64: u32 = 0xfeedfacf;
 // usr/include/mach-o/loader.h, swapped magic number for MachHeader (big-endian)
-pub const MH_CIGAM_64: u32 = 0xcffaedfe;
+pub(crate) const MH_CIGAM_64: u32 = 0xcffaedfe;
 
 /// Load command constants from usr/include/mach-o/loader.h
 #[repr(u32)]
@@ -655,7 +655,7 @@ impl<'buf> Iterator for LoadCommandsIter<'buf> {
 
 /// Retrieves an integer sysctl by name. Returns the default value if retrieval
 /// fails.
-pub fn sysctl_by_name<T: Sized + Default>(name: &[u8]) -> T {
+pub(crate) fn sysctl_by_name<T: Sized + Default>(name: &[u8]) -> T {
     let mut out = T::default();
     let mut len = std::mem::size_of_val(&out);
 
@@ -681,14 +681,14 @@ pub fn sysctl_by_name<T: Sized + Default>(name: &[u8]) -> T {
 /// Retrieves an `i32` sysctl by name and casts it to the specified integer type.
 /// Returns the default value if retrieval fails or the value is out of bounds of
 /// the specified integer type.
-pub fn int_sysctl_by_name<T: TryFrom<i32> + Default>(name: &[u8]) -> T {
+pub(crate) fn int_sysctl_by_name<T: TryFrom<i32> + Default>(name: &[u8]) -> T {
     let val = sysctl_by_name::<i32>(name);
     T::try_from(val).unwrap_or_default()
 }
 
 /// Retrieves a string sysctl by name. Returns an empty string if the retrieval
 /// fails or the string can't be converted to utf-8.
-pub fn sysctl_string(name: &[u8]) -> String {
+pub(crate) fn sysctl_string(name: &[u8]) -> String {
     let mut buf_len = 0;
 
     // SAFETY: syscalls

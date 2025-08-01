@@ -25,7 +25,7 @@ impl MinidumpWriter {
         &mut self,
         buffer: &mut DumpBuf,
         dumper: &TaskDumper,
-    ) -> std::result::Result<MDRawDirectory, super::super::WriterError> {
+    ) -> std::result::Result<MDRawDirectory, WriterError> {
         let (dirent, context) = self
             .write_thread_list_impl(buffer, dumper)
             .map_err(WriterError::from)?;

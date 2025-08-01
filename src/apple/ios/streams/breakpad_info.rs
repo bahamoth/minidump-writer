@@ -1,13 +1,7 @@
-use crate::{
-    apple::{
-        common::streams::breakpad_info::{self, BreakpadInfoWriter},
-        ios::{minidump_writer::MinidumpWriter, task_dumper::TaskDumper},
-    },
-    dir_section::DumpBuf,
-    minidump_format::MDRawDirectory,
-};
+use super::*;
+use crate::apple::common::streams::breakpad_info::BreakpadInfoStream;
 
-impl BreakpadInfoWriter for MinidumpWriter {
+impl BreakpadInfoStream for MinidumpWriter {
     fn handler_thread(&self) -> u32 {
         self.handler_thread.unwrap_or(0)
     }
@@ -28,8 +22,7 @@ impl MinidumpWriter {
         &mut self,
         buffer: &mut DumpBuf,
         _dumper: &TaskDumper,
-    ) -> Result<MDRawDirectory, super::super::WriterError> {
-        breakpad_info::write_breakpad_info(self, buffer)
-            .map_err(|e| super::super::WriterError::MemoryWriterError(e.to_string()))
+    ) -> Result<MDRawDirectory, WriterError> {
+        BreakpadInfoStream::write_breakpad_info(self, buffer).map_err(WriterError::from)
     }
 }

@@ -1,12 +1,16 @@
 // Common code shared between Apple platforms (macOS, iOS)
 
+pub mod errors;
 pub mod mach;
 #[macro_use]
-pub mod task_dumper_base;
+pub mod task_dumper;
 
-pub(in crate::apple) use task_dumper_base::mach_call;
+pub(in crate::apple) use task_dumper::mach_call;
 pub mod streams;
 pub mod types;
 
-pub use task_dumper_base::TaskDumperBase;
-pub use types::{AllImagesInfo, ImageInfo, TaskDumpError, VMRegionInfo};
+pub use errors::WriterError;
+pub use task_dumper::TaskDumper;
+pub use types::{
+    AllImagesInfo, CrashContext, ExceptionInfo, ImageInfo, TaskDumpError, VMRegionInfo,
+};

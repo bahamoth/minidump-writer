@@ -1,4 +1,4 @@
-// Base TaskDumper implementation shared between Apple platforms
+// Common TaskDumper implementation shared between Apple platforms
 
 use super::{mach, types::*};
 use mach2::mach_types as mt;
@@ -26,15 +26,14 @@ macro_rules! mach_call {
 
 pub(in crate::apple) use mach_call;
 
-/// Base implementation for TaskDumper with common functionality
-/// for all Apple platforms
-pub struct TaskDumperBase {
+/// Common implementation for TaskDumper shared between Apple platforms
+pub struct TaskDumper {
     pub(crate) task: mt::task_t,
     pub(crate) page_size: i64,
 }
 
-impl TaskDumperBase {
-    /// Constructs a [`TaskDumperBase`] for the specified task
+impl TaskDumper {
+    /// Constructs a [`TaskDumper`] for the specified task
     pub fn new(task: mt::task_t) -> Self {
         Self {
             task,

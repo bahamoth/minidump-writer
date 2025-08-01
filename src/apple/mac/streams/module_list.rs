@@ -125,8 +125,6 @@ impl MinidumpWriter {
         image: ImageInfo,
         dumper: &TaskDumper,
     ) -> Result<ImageDetails, TaskDumpError> {
-        // Check if we're reading from current process
-        let is_current_process = dumper.task() == unsafe { mach::mach_task_self() };
         let mut load_info = None;
         let mut version = None;
         let mut uuid = None;
@@ -171,25 +169,7 @@ impl MinidumpWriter {
             id: mach::LoadCommandKind::Uuid,
         })?;
 
-        let file_path = if is_current_process {
-            // For current process, we can use dyld API to get reliable file paths
-            let image_count = unsafe { _dyld_image_count() };
-            let mut found_path = None;
-
-            for i in 0..image_count {
-                let header = unsafe { _dyld_get_image_header(i) };
-                if header as u64 == image.load_address {
-                    let name_ptr = unsafe { _dyld_get_image_name(i) };
-                    if !name_ptr.is_null() {
-                        let c_str = unsafe { std::ffi::CStr::from_ptr(name_ptr) };
-                        found_path = c_str.to_str().ok().map(String::from);
-                    }
-                    break;
-                }
-            }
-            found_path
-        } else if image.file_path != 0 {
-            // For other processes, try to read from memory
+        let file_path = if image.file_path != 0 {
             dumper
                 .read_string(image.file_path, None)
                 .unwrap_or_default()
@@ -337,14 +317,6 @@ impl MinidumpWriter {
 
         Ok(raw_module)
     }
-}
-
-// dyld API bindings for macOS
-#[allow(non_snake_case)]
-extern "C" {
-    fn _dyld_image_count() -> u32;
-    fn _dyld_get_image_name(image_index: u32) -> *const libc::c_char;
-    fn _dyld_get_image_header(image_index: u32) -> *const libc::c_void;
 }
 
 #[cfg(test)]
