@@ -12,10 +12,9 @@
 
 use crate::{
     apple::{
-        common::mach,
+        common::{mach, TaskDumper},
         ios::{
             minidump_writer::{MinidumpWriter, WriterError},
-            task_dumper::TaskDumper,
         },
     },
     dir_section::DumpBuf,

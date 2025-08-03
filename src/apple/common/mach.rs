@@ -379,12 +379,6 @@ impl TaskInfo for task_info::task_dyld_info {
 
 /// <usr/include/mach-o/loader.h>, the file type for the main executable image
 pub(crate) const MH_EXECUTE: u32 = 0x2;
-/// <usr/include/mach-o/loader.h>, the file type dyld, the dynamic loader
-pub(crate) const MH_DYLINKER: u32 = 0x7;
-// usr/include/mach-o/loader.h, magic number for MachHeader
-pub(crate) const MH_MAGIC_64: u32 = 0xfeedfacf;
-// usr/include/mach-o/loader.h, swapped magic number for MachHeader (big-endian)
-pub(crate) const MH_CIGAM_64: u32 = 0xcffaedfe;
 
 /// Load command constants from usr/include/mach-o/loader.h
 #[repr(u32)]

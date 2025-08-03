@@ -179,7 +179,7 @@ impl TaskDumper {
     }
 
     /// Get basic task info
-    pub fn task_info<T: mach::TaskInfo>(&self) -> Result<T, TaskDumpError> {
+    pub(crate) fn task_info<T: mach::TaskInfo>(&self) -> Result<T, TaskDumpError> {
         let mut info = std::mem::MaybeUninit::<T>::uninit();
         let mut count = (std::mem::size_of::<T>() / std::mem::size_of::<u32>()) as u32;
 

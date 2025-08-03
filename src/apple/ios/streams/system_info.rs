@@ -1,7 +1,7 @@
 use crate::{
     apple::{
-        common::mach,
-        ios::{minidump_writer::MinidumpWriter, task_dumper::TaskDumper},
+        common::{mach, TaskDumper},
+        ios::minidump_writer::MinidumpWriter,
     },
     dir_section::DumpBuf,
     mem_writer::{write_string_to_location, MemoryWriter},
@@ -50,7 +50,7 @@ impl MinidumpWriter {
         _dumper: &TaskDumper,
     ) -> Result<MDRawDirectory, super::super::WriterError> {
         self.write_system_info_impl(buffer)
-            .map_err(|e| super::super::WriterError::SystemInfoError(e))
+            .map_err(super::super::WriterError::SystemInfoError)
     }
 
     fn write_system_info_impl(

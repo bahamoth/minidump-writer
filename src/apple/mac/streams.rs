@@ -17,5 +17,3 @@ use super::{
 use crate::apple::common::{mach, TaskDumpError};
 use crate::{dir_section::DumpBuf, mem_writer::*, minidump_format::*};
 
-// Re-export crash_context for stream modules
-use crash_context;

@@ -3,7 +3,6 @@
 use crate::apple::common::mach_call;
 use crate::apple::common::{mach, AllImagesInfo, TaskDumpError, VMRegionInfo};
 pub use crate::apple::common::{ImageInfo, TaskDumper};
-use mach2::mach_types as mt;
 
 /// macOS-specific extensions to TaskDumper
 /// Unlike iOS, macOS can dump external processes
@@ -134,7 +133,7 @@ impl TaskDumper {
     }
 
     /// Get thread info for the specified thread
-    pub fn thread_info<T: mach::ThreadInfo>(&self, tid: u32) -> Result<T, TaskDumpError> {
+    pub(crate) fn thread_info<T: mach::ThreadInfo>(&self, tid: u32) -> Result<T, TaskDumpError> {
         let mut thread_info = std::mem::MaybeUninit::<T>::uninit();
         let mut count = (std::mem::size_of::<T>() / std::mem::size_of::<u32>()) as u32;
         mach_call!(mach::thread_info(

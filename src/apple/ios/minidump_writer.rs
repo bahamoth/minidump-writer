@@ -1,5 +1,6 @@
 use crate::{
-    apple::ios::{crash_context::IosCrashContext, task_dumper::TaskDumper},
+    apple::ios::crash_context::IosCrashContext,
+    apple::common::TaskDumper,
     dir_section::{DirSection, DumpBuf},
     mem_writer::*,
     minidump_format::{
@@ -105,7 +106,7 @@ impl MinidumpWriter {
         let mut buffer = DumpBuf::with_capacity(0);
 
         let mut header_section = MemoryWriter::<MDRawHeader>::alloc(&mut buffer)
-            .map_err(|e| WriterError::MemoryWriterError(e.to_string()))?;
+            .map_err(WriterError::MemoryWriterError)?;
 
         let mut dir_section =
             DirSection::new(&mut buffer, num_writers, destination).map_err(|e| {
@@ -127,15 +128,14 @@ impl MinidumpWriter {
 
         header_section
             .set_value(&mut buffer, header)
-            .map_err(|e| WriterError::MemoryWriterError(e.to_string()))?;
+            .map_err(WriterError::MemoryWriterError)?;
 
         // Ensure the header gets flushed
         dir_section
             .write_to_file(&mut buffer, None)
             .map_err(|e| WriterError::DirectoryError(format!("Failed to flush header: {e}")))?;
 
-        let dumper =
-            TaskDumper::new(self.task).map_err(|e| WriterError::TaskDumperError(e.to_string()))?;
+        let dumper = TaskDumper::new(self.task);
 
         for mut writer in writers {
             let dirent = writer(self, &mut buffer, &dumper)?;

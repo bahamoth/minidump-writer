@@ -4,10 +4,13 @@ use crate::apple::common::mach_call;
 use crate::apple::common::{
     mach, AllImagesInfo, ImageInfo, TaskDumpError, TaskDumper, VMRegionInfo,
 };
-use mach2::mach_types as mt;
 
 /// dyld all image infos version we support
 const DYLD_ALL_IMAGE_INFOS_VERSION: u32 = 1;
+
+// Mach-O header magic numbers for validation
+const MH_MAGIC_64: u32 = 0xfeedfacf;
+const MH_CIGAM_64: u32 = 0xcffaedfe;
 
 /// Thread basic info structure for iOS
 #[repr(C)]
@@ -47,7 +50,7 @@ impl TaskDumper {
     }
 
     /// Get thread info for the specified thread
-    pub fn thread_info<T: mach::ThreadInfo>(&self, tid: u32) -> Result<T, TaskDumpError> {
+    pub(crate) fn thread_info<T: mach::ThreadInfo>(&self, tid: u32) -> Result<T, TaskDumpError> {
         let mut thread_info = std::mem::MaybeUninit::<T>::uninit();
         let mut count = (std::mem::size_of::<T>() / std::mem::size_of::<u32>()) as u32;
 
@@ -147,7 +150,7 @@ impl TaskDumper {
             let header = &header_buf[0];
 
             // Validate magic number before accessing other fields
-            if header.magic != mach::MH_MAGIC_64 && header.magic != mach::MH_CIGAM_64 {
+            if header.magic != MH_MAGIC_64 && header.magic != MH_CIGAM_64 {
                 continue; // Skip invalid headers
             }
 
@@ -173,7 +176,7 @@ impl TaskDumper {
 
         // Validate magic number
         // iOS runs on ARM64 which is little-endian, but check both for completeness
-        if header.magic != mach::MH_MAGIC_64 && header.magic != mach::MH_CIGAM_64 {
+        if header.magic != MH_MAGIC_64 && header.magic != MH_CIGAM_64 {
             return Err(TaskDumpError::InvalidMachHeader);
         }
 

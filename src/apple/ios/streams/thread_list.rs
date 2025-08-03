@@ -1,7 +1,7 @@
 use crate::{
-    apple::ios::{
-        minidump_writer::{MinidumpWriter, WriterError},
-        task_dumper::TaskDumper,
+    apple::{
+        common::TaskDumper,
+        ios::minidump_writer::{MinidumpWriter, WriterError},
     },
     dir_section::DumpBuf,
     mem_writer::{MemoryArrayWriter, MemoryWriter},
@@ -103,10 +103,7 @@ impl MinidumpWriter {
                     }
                     Err(e) => {
                         // Failed to read thread state - leave thread context as default (empty)
-                        eprintln!(
-                            "iOS: Failed to read thread state for thread {}: {:?}",
-                            tid, e
-                        );
+                        eprintln!("iOS: Failed to read thread state for thread {tid}: {e:?}");
                     }
                 }
             }

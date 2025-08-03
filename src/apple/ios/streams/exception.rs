@@ -1,5 +1,6 @@
 use crate::{
-    apple::ios::{minidump_writer::MinidumpWriter, task_dumper::TaskDumper},
+    apple::ios::minidump_writer::MinidumpWriter,
+    apple::common::TaskDumper,
     dir_section::DumpBuf,
     mem_writer::MemoryWriter,
     minidump_format::{
@@ -17,7 +18,7 @@ impl MinidumpWriter {
         _dumper: &TaskDumper,
     ) -> std::result::Result<MDRawDirectory, super::super::WriterError> {
         self.write_exception_impl(buffer, self.crashing_thread_context)
-            .map_err(|e| super::super::WriterError::StreamError(e))
+            .map_err(super::super::WriterError::StreamError)
     }
 
     fn write_exception_impl(

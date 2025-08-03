@@ -1,12 +1,21 @@
 use crate::{dir_section::DumpBuf, mem_writer::*, minidump_format::*};
 
+/// Common error type for stream operations
+#[derive(Debug, thiserror::Error)]
+pub enum StreamError {
+    #[error("Memory writer error")]
+    MemoryWriter(#[from] crate::mem_writer::MemoryWriterError),
+    #[error("Task dump error")]
+    TaskDump(#[from] crate::apple::common::TaskDumpError),
+}
+
 /// Extension trait for writing MemoryList stream
 pub(crate) trait MemoryListStream {
     /// Access to memory blocks for the memory list
     fn memory_blocks_mut(&mut self) -> &mut Vec<MDMemoryDescriptor>;
 
     /// Access to crash context
-    fn crash_context(&self) -> Option<&crate::apple::common::CrashContext>;
+    fn crash_context(&self) -> Option<&crate::apple::common::types::CrashContext>;
 
     /// Writes the [`MDStreamType::MemoryListStream`]. The memory blocks that are
     /// written into this stream are the raw thread contexts that were retrieved
@@ -15,7 +24,7 @@ pub(crate) trait MemoryListStream {
         &mut self,
         buffer: &mut DumpBuf,
         dumper: &crate::apple::common::TaskDumper,
-    ) -> Result<MDRawDirectory, MemoryWriterError> {
+    ) -> Result<MDRawDirectory, StreamError> {
         // Include some memory around the instruction pointer if the crash was
         // due to an exception
         if let Some(cc) = self.crash_context() {

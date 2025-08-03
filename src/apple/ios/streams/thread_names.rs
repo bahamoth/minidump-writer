@@ -13,7 +13,7 @@ impl MinidumpWriter {
     ) -> Result<MDRawDirectory, WriterError> {
         let threads = dumper
             .read_threads()
-            .map_err(|e| WriterError::TaskDumperError(e.to_string()))?;
+            .map_err(WriterError::TaskDumperError)?;
 
         // Filter out handler thread
         let threads: Vec<_> = threads
@@ -23,7 +23,7 @@ impl MinidumpWriter {
             .collect();
 
         let list_header = MemoryWriter::<u32>::alloc_with_val(buffer, threads.len() as u32)
-            .map_err(|e| WriterError::MemoryWriterError(e.to_string()))?;
+            .map_err(WriterError::MemoryWriterError)?;
 
         let mut dirent = MDRawDirectory {
             stream_type: MDStreamType::ThreadNamesStream as u32,
@@ -31,7 +31,7 @@ impl MinidumpWriter {
         };
 
         let mut names = MemoryArrayWriter::<MDRawThreadName>::alloc_array(buffer, threads.len())
-            .map_err(|e| WriterError::MemoryWriterError(e.to_string()))?;
+            .map_err(WriterError::MemoryWriterError)?;
         dirent.location.data_size += names.location().data_size;
 
         // Write all thread IDs with name_rva = 0 (name unavailable)
@@ -43,7 +43,7 @@ impl MinidumpWriter {
 
             names
                 .set_value_at(buffer, thread, i)
-                .map_err(|e| WriterError::MemoryWriterError(e.to_string()))?;
+                .map_err(WriterError::MemoryWriterError)?;
         }
 
         Ok(dirent)

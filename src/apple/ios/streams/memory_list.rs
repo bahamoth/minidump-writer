@@ -6,7 +6,7 @@ impl MemoryListStream for MinidumpWriter {
         &mut self.memory_blocks
     }
 
-    fn crash_context(&self) -> Option<&crate::apple::common::CrashContext> {
+    fn crash_context(&self) -> Option<&crate::apple::common::types::CrashContext> {
         self.crash_context.as_ref()
     }
 }
@@ -18,6 +18,12 @@ impl MinidumpWriter {
         buffer: &mut DumpBuf,
         dumper: &TaskDumper,
     ) -> Result<MDRawDirectory, WriterError> {
-        MemoryListStream::write_memory_list(self, buffer, dumper).map_err(WriterError::from)
+        use crate::apple::common::streams::memory_list::StreamError;
+        
+        MemoryListStream::write_memory_list(self, buffer, dumper)
+            .map_err(|e| match e {
+                StreamError::MemoryWriter(e) => WriterError::MemoryWriterError(e),
+                StreamError::TaskDump(e) => WriterError::TaskDumperError(e),
+            })
     }
 }
