@@ -7,7 +7,15 @@ impl MemoryListStream for MinidumpWriter {
     }
 
     fn crash_context(&self) -> Option<&crate::apple::common::types::CrashContext> {
-        self.crash_context.as_ref()
+        // On iOS, CrashContext is a type alias for IosCrashContext
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "ios")] {
+                self.crash_context.as_ref()
+            } else {
+                // When testing iOS on macOS, we need to handle the type mismatch
+                None
+            }
+        }
     }
 }
 
@@ -19,11 +27,10 @@ impl MinidumpWriter {
         dumper: &TaskDumper,
     ) -> Result<MDRawDirectory, WriterError> {
         use crate::apple::common::streams::memory_list::StreamError;
-        
-        MemoryListStream::write_memory_list(self, buffer, dumper)
-            .map_err(|e| match e {
-                StreamError::MemoryWriter(e) => WriterError::MemoryWriterError(e),
-                StreamError::TaskDump(e) => WriterError::TaskDumperError(e),
-            })
+
+        MemoryListStream::write_memory_list(self, buffer, dumper).map_err(|e| match e {
+            StreamError::MemoryWriter(e) => WriterError::MemoryWriterError(e),
+            StreamError::TaskDump(e) => WriterError::TaskDumperError(e),
+        })
     }
 }

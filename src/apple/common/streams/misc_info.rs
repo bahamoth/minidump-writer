@@ -1,5 +1,5 @@
 use crate::{
-    apple::common::mach,
+    apple::common::{mach, TaskDumperExt},
     dir_section::DumpBuf,
     mem_writer::*,
     minidump_format::{

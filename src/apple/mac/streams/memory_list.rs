@@ -21,11 +21,10 @@ impl MinidumpWriter {
         dumper: &TaskDumper,
     ) -> Result<MDRawDirectory, WriterError> {
         use crate::apple::common::streams::memory_list::StreamError;
-        
-        MemoryListStream::write_memory_list(self, buffer, dumper)
-            .map_err(|e| match e {
-                StreamError::MemoryWriter(e) => WriterError::MemoryWriterError(e),
-                StreamError::TaskDump(e) => WriterError::TaskDumpError(e),
-            })
+
+        MemoryListStream::write_memory_list(self, buffer, dumper).map_err(|e| match e {
+            StreamError::MemoryWriter(e) => WriterError::MemoryWriterError(e),
+            StreamError::TaskDump(e) => WriterError::TaskDumpError(e),
+        })
     }
 }

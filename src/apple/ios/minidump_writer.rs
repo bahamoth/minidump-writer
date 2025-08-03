@@ -1,6 +1,6 @@
 use crate::{
-    apple::ios::crash_context::IosCrashContext,
     apple::common::TaskDumper,
+    apple::ios::crash_context::IosCrashContext,
     dir_section::{DirSection, DumpBuf},
     mem_writer::*,
     minidump_format::{

@@ -214,3 +214,31 @@ impl TaskDumper {
         Ok(unsafe { std::slice::from_raw_parts(threads, thread_count as usize) })
     }
 }
+
+/// Platform-specific extensions to TaskDumper
+///
+/// This trait contains methods that have different implementations between
+/// macOS and iOS. Each platform provides its own implementation in their
+/// respective modules.
+pub trait TaskDumperExt {
+    /// Retrieves all loaded images/modules in the process
+    fn read_images(&self) -> Result<(AllImagesInfo, Vec<ImageInfo>), TaskDumpError>;
+
+    /// Finds and returns the main executable image
+    fn read_executable_image(&self) -> Result<ImageInfo, TaskDumpError>;
+
+    /// Gets VM region information for a specific address
+    fn get_vm_region(&self, addr: u64) -> Result<VMRegionInfo, TaskDumpError>;
+
+    /// Reads load commands for a Mach-O image
+    fn read_load_commands(&self, image: &ImageInfo) -> Result<mach::LoadCommands, TaskDumpError>;
+
+    /// Reads thread state for the specified thread
+    fn read_thread_state(&self, tid: u32) -> Result<mach::ThreadState, TaskDumpError>;
+
+    /// Gets thread info for the specified thread
+    fn thread_info<T: mach::ThreadInfo>(&self, tid: u32) -> Result<T, TaskDumpError>;
+
+    /// Gets the process ID for the task
+    fn pid_for_task(&self) -> Result<i32, TaskDumpError>;
+}

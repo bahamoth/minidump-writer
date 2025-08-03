@@ -10,14 +10,8 @@ pub mod thread_list;
 pub mod thread_names;
 
 // Common imports for all stream modules
-use super::{
-    minidump_writer::{MinidumpWriter, WriterError},
-};
-use crate::{
-    apple::common::TaskDumper,
-    dir_section::DumpBuf, 
-    minidump_format::*
-};
+use super::minidump_writer::{MinidumpWriter, WriterError};
+use crate::{apple::common::TaskDumper, dir_section::DumpBuf, minidump_format::*};
 
 #[derive(Debug, thiserror::Error)]
 pub enum StreamError {

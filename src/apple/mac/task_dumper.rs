@@ -1,19 +1,22 @@
 // macOS-specific TaskDumper implementation
 
+#[cfg(not(feature = "test-ios-on-macos"))]
 use crate::apple::common::mach_call;
-use crate::apple::common::{mach, AllImagesInfo, TaskDumpError, VMRegionInfo};
+#[cfg(not(feature = "test-ios-on-macos"))]
+use crate::apple::common::{mach, AllImagesInfo, TaskDumpError, TaskDumperExt, VMRegionInfo};
 pub use crate::apple::common::{ImageInfo, TaskDumper};
 
 /// macOS-specific extensions to TaskDumper
 /// Unlike iOS, macOS can dump external processes
-impl TaskDumper {
+#[cfg(all(target_os = "macos", not(feature = "test-ios-on-macos")))]
+impl TaskDumperExt for TaskDumper {
     /// Retrieves all of the images loaded in the task
     ///
     /// # Errors
     ///
     /// The syscall to retrieve the location of the loaded images fails, or
     /// the syscall to read the loaded images from the process memory fails
-    pub fn read_images(&self) -> Result<(AllImagesInfo, Vec<ImageInfo>), TaskDumpError> {
+    fn read_images(&self) -> Result<(AllImagesInfo, Vec<ImageInfo>), TaskDumpError> {
         // Retrieve the address at which the list of loaded images is located
         // within the task
         let all_images_addr = {
@@ -45,7 +48,7 @@ impl TaskDumper {
     ///
     /// Any of the errors that apply to [`Self::read_images`] apply here, in
     /// addition to not being able to find the main executable image
-    pub fn read_executable_image(&self) -> Result<ImageInfo, TaskDumpError> {
+    fn read_executable_image(&self) -> Result<ImageInfo, TaskDumpError> {
         let (_, images) = self.read_images()?;
         for img in images {
             let mach_header = self.read_task_memory::<mach::MachHeader>(img.load_address, 1)?;
@@ -65,7 +68,7 @@ impl TaskDumper {
     ///
     /// The syscall to retrieve the VM region fails, or the address is not present
     /// in any VM region
-    pub fn get_vm_region(&self, addr: u64) -> Result<VMRegionInfo, TaskDumpError> {
+    fn get_vm_region(&self, addr: u64) -> Result<VMRegionInfo, TaskDumpError> {
         let mut region_base = addr;
         let mut region_size = 0;
         let mut nesting_level = 0;
@@ -102,10 +105,7 @@ impl TaskDumper {
     ///
     /// Fails if we are unable to read the image header and load commands from
     /// the task
-    pub fn read_load_commands(
-        &self,
-        image: &ImageInfo,
-    ) -> Result<mach::LoadCommands, TaskDumpError> {
+    fn read_load_commands(&self, image: &ImageInfo) -> Result<mach::LoadCommands, TaskDumpError> {
         let header_buf = self.read_task_memory::<mach::MachHeader>(image.load_address, 1)?;
         let header = &header_buf[0];
 
@@ -121,7 +121,7 @@ impl TaskDumper {
     }
 
     /// Read thread state for the specified thread
-    pub fn read_thread_state(&self, tid: u32) -> Result<mach::ThreadState, TaskDumpError> {
+    fn read_thread_state(&self, tid: u32) -> Result<mach::ThreadState, TaskDumpError> {
         let mut thread_state = mach::ThreadState::default();
         mach_call!(mach::thread_get_state(
             tid,
@@ -133,7 +133,7 @@ impl TaskDumper {
     }
 
     /// Get thread info for the specified thread
-    pub(crate) fn thread_info<T: mach::ThreadInfo>(&self, tid: u32) -> Result<T, TaskDumpError> {
+    fn thread_info<T: mach::ThreadInfo>(&self, tid: u32) -> Result<T, TaskDumpError> {
         let mut thread_info = std::mem::MaybeUninit::<T>::uninit();
         let mut count = (std::mem::size_of::<T>() / std::mem::size_of::<u32>()) as u32;
         mach_call!(mach::thread_info(
@@ -146,7 +146,7 @@ impl TaskDumper {
     }
 
     /// Get PID for the task
-    pub fn pid_for_task(&self) -> Result<i32, TaskDumpError> {
+    fn pid_for_task(&self) -> Result<i32, TaskDumpError> {
         let mut pid = 0;
         mach_call!(mach::pid_for_task(self.task, &mut pid))?;
         Ok(pid)

@@ -10,6 +10,6 @@ pub mod streams;
 pub mod types;
 
 pub use errors::WriterError;
-pub use task_dumper::TaskDumper;
+pub use task_dumper::{TaskDumper, TaskDumperExt};
 pub use types::{AllImagesInfo, ImageInfo, TaskDumpError, VMRegionInfo};
 // CrashContext and ExceptionInfo are conditionally exported from types module

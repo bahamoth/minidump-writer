@@ -1,6 +1,6 @@
 use crate::{
-    apple::ios::minidump_writer::MinidumpWriter,
     apple::common::TaskDumper,
+    apple::ios::minidump_writer::MinidumpWriter,
     dir_section::DumpBuf,
     mem_writer::MemoryWriter,
     minidump_format::{

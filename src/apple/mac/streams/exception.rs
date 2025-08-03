@@ -61,21 +61,20 @@ impl MinidumpWriter {
                 // +--------------------------------------------------------+
                 // |[63:61] resource type | [60:58] flavor | [57:32] unused |
                 // +--------------------------------------------------------+
-                let exception_code =
-                    if exc.kind == et::EXC_RESOURCE || exc.kind == et::EXC_GUARD {
-                        (code >> 32) as u32
-                    } else if let Some(wrapped) = wrapped_exc {
-                        wrapped.code
-                    } else {
-                        // For all other exceptions types, the value in the code
-                        // _should_ never exceed 32 bits, crashpad does an actual
-                        // range check here.
-                        if code > u32::MAX.into() {
-                            // TODO: do something more than logging?
-                            log::warn!("exception code {code:#018x} exceeds the expected 32 bits");
-                        }
-                        code as u32
-                    };
+                let exception_code = if exc.kind == et::EXC_RESOURCE || exc.kind == et::EXC_GUARD {
+                    (code >> 32) as u32
+                } else if let Some(wrapped) = wrapped_exc {
+                    wrapped.code
+                } else {
+                    // For all other exceptions types, the value in the code
+                    // _should_ never exceed 32 bits, crashpad does an actual
+                    // range check here.
+                    if code > u32::MAX.into() {
+                        // TODO: do something more than logging?
+                        log::warn!("exception code {code:#018x} exceeds the expected 32 bits");
+                    }
+                    code as u32
+                };
 
                 let exception_kind = if let Some(wrapped) = wrapped_exc {
                     wrapped.kind

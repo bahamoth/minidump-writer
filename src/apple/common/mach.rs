@@ -366,7 +366,7 @@ pub(crate) trait TaskInfo {
 /// Minimal trait that just pairs a structure that can be filled out by
 /// [`thread_info`] with the "flavor" that tells it the info we
 /// actually want to retrieve
-pub(crate) trait ThreadInfo {
+pub trait ThreadInfo {
     /// One of the `THREAD_*` integers. I assume it's very bad if you implement
     /// this trait and provide the wrong flavor for the struct
     const FLAVOR: u32;

@@ -1,4 +1,6 @@
-use crate::{dir_section::DumpBuf, mem_writer::*, minidump_format::*};
+use crate::{
+    apple::common::TaskDumperExt, dir_section::DumpBuf, mem_writer::*, minidump_format::*,
+};
 
 /// Common error type for stream operations
 #[derive(Debug, thiserror::Error)]

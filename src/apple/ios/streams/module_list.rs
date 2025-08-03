@@ -12,10 +12,8 @@
 
 use crate::{
     apple::{
-        common::{mach, TaskDumper},
-        ios::{
-            minidump_writer::{MinidumpWriter, WriterError},
-        },
+        common::{mach, TaskDumper, TaskDumperExt},
+        ios::minidump_writer::{MinidumpWriter, WriterError},
     },
     dir_section::DumpBuf,
     mem_writer::{write_string_to_location, MemoryArrayWriter, MemoryWriter},
